@@ -24,7 +24,10 @@
 void* New     ( int    size            );
 void* NewArray( int    size, int count );
 void* Del     ( void** ptrptr          );
+void* DelArray( void** ptrptr          );
+int   Exit    ( int    exit            );
 
-#define Delete( self ) Del( (void**) self )
+#define Delete( self )      Del( (void**) self )
+#define DeleteArray( self ) DelArray( (void**) self )
 
 #endif

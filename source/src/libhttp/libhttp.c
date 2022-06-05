@@ -52,7 +52,7 @@ HTTPRequest_free( HTTPRequest** self )
 		String_free( &(*self)->resource  );
 		String_free( &(*self)->version   );
 		String_free( &(*self)->host      );
-		Array_free ( &(*self)->headers   );
+		Array_free_destructor( &(*self)->headers, (void* (*)( void** )) HTTPHeader_free );
 	}
 
 	return Delete( self );
@@ -129,16 +129,19 @@ HTTPRequest_getHost    ( const HTTPRequest*  self )
 void
 HTTPRequest_validate( HTTPRequest* self )
 {
-	self->valid =   String_contentEquals( self->method,  "GET"      )
-	            &&  String_contentEquals( self->version, "HTTP/1.1" )
-	            && !String_contentEquals( self->host,    ""         );
+	self->valid =   String_contentEquals( self->method,   "GET"      )
+	            &&  String_contentEquals( self->version,  "HTTP/1.1" )
+	            && !String_contentEquals( self->host,     ""         )
+	            && !String_contains     ( self->resource, ".."       );
 }
 
 HTTPRequest*
 HTTPRequest_Parse( IO* connection )
 {
 	HTTPRequest* request = HTTPRequest_new();
+	if ( 1 )
 	{
+
 		String* line = HTTPRequest_ReadLine( connection );
 
 		if ( line )

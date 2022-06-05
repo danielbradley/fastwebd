@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <signal.h>
 
 #include "libbase.h"
 #include "libhttp.h"
@@ -6,6 +7,29 @@
 
 static void    HTTPServer_Process_srvDir_connection    ( const Path* srvDir,       IO*          connection );
 static Path*   HTTPServer_DetermineFile__srvDir_request( const Path* srvDir, const HTTPRequest* request    );
+
+static IO*     ServerSocket;
+static bool    KeepAlive = true;
+
+typedef void (*sig_t) (int);
+
+static sig_t signal1  = null;
+static sig_t signal2  = null;
+static sig_t signal13 = null;
+
+void signalHandler( int signal )
+{
+	KeepAlive = false;
+
+	IO_close( ServerSocket );
+
+	printf( "Signal: %i\n", signal );
+}
+
+void ignoreSigpipe( int signal )
+{
+	printf( "Signal: %i - ignoring SIGPIE\n", signal );
+}
 
 struct _HTTPServer
 {
@@ -23,6 +47,12 @@ HTTPServer_new_port( short port )
 		self->loopback = Address_new_port( port );
 		self->socket   = IO_Socket();
 	}
+
+	signal1  = signal(  1, signalHandler );
+	signal2  = signal(  2, signalHandler );
+	signal13 = signal( 13, ignoreSigpipe );
+
+	ServerSocket = self->socket;
 
 	return self;
 }
@@ -64,12 +94,13 @@ HTTPServer_acceptConnections( HTTPServer* self )
 	IO*      connection = NULL;
 	Path*    srvDir     = Path_CurrentDirectory();
 
-	while ( IO_accept( self->socket, peer, &connection ) )
+	while ( KeepAlive && IO_accept( self->socket, peer, &connection ) )
 	{
 		HTTPServer_Process_srvDir_connection( srvDir, connection );
 		IO_free( &connection );
-	}  
+	}
 
+	Path_free( &srvDir );
 	Address_free( &peer );
 }
 
@@ -97,11 +128,13 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 			IO_write( connection, status );
 		}
 		else
+		if ( 1 )
 		{
 			fprintf( stdout, "Request: %s\n", String_getChars( HTTPRequest_getStartLine( request ) ) );
 			fprintf( stdout, "Request: %s\n", String_getChars( HTTPRequest_getHost     ( request ) ) );
 
 			Path* resource = HTTPServer_DetermineFile__srvDir_request( srvDir, request );
+			if ( 1 )
 			{
 				char  headers[1024];
 
@@ -117,6 +150,7 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 					IO_write( connection, status );
 				}
 				else
+				if ( 1 )
 				{
 					const char* status    = "HTTP/1.1 200 OK \r\n";
 					const char* end       = "\r\n";
@@ -131,7 +165,7 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 
 					IO_write   ( connection, status             );
 					IO_write   ( connection, headers            );
-					IO_SendFile( connection, File_getIO( file ) );
+					IO_sendFile( connection, File_getIO( file ) );
 					IO_write   ( connection, end                );
 				}
 
@@ -159,7 +193,7 @@ HTTPServer_DetermineFile__srvDir_request( const Path* srvDir, const HTTPRequest*
 	printf( "host:     %s\n", _host     );
 	printf( "resource: %s\n", _resource );
 
-	Path* site = Path_child( srvDir, _host     );
+	Path* site = Path_child( srvDir, _host );
 	{
 		path = Path_child( site,   _resource );
 

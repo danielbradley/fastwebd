@@ -1,12 +1,8 @@
 
 #include "libhttpserver.h"
-#include <stdio.h>
-char* Join( const char* dirname, const char* basename );
 
 int main()
 {
-	printf( "%s\n", Join( "www", "index.html" ) );
-
 	HTTPServer* server = HTTPServer_new_port( 8080 );
 
 	if ( !server )
@@ -24,4 +20,6 @@ int main()
 	}
 
 	HTTPServer_free( &server );
+
+	Exit( 0 );
 }

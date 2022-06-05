@@ -20,8 +20,12 @@
 #define MIME_UNKNOWN    "application/binary"
 
 static const char* File_DetermineMimeType( const String* extension );
+static       void  IO_PrintError( FILE* out );
 //static
        char* Join( const char* dirname, const char* basename );
+
+static int Objects = 0;
+static int Arrays  = 0;
 
 struct _Address
 {
@@ -57,12 +61,14 @@ struct _String
 void*
 New( int size )
 {
+	Objects++;
 	return calloc( 1, size );
 }
 
 void*
 NewArray( int size, int count )
 {
+	Arrays++;
 	return calloc( count, size );
 }
 
@@ -72,8 +78,27 @@ Del( void** self )
 	if ( *self )
 	{
 		free( *self ); *self = 0;
+		Objects--;
 	}
 	return *self;
+}
+
+void*
+DelArray( void** self )
+{
+	if ( *self )
+	{
+		free( *self ); *self = 0;
+		Arrays--;
+	}
+	return *self;
+}
+
+int Exit( int exit )
+{
+	if ( Objects + Arrays ) printf( "Objects: %i, Arrays: %i\n", Objects, Arrays );
+
+	return exit;
 }
 
 Address*
@@ -110,7 +135,7 @@ CharString_new( const char* src )
 char*
 CharString_free( char** self )
 {
-	return Delete( self );
+	return DeleteArray( self );
 }
 
 File* File_new ( const char* filepath )
@@ -129,7 +154,8 @@ File* File_free( File** self )
 {
 	if ( *self )
 	{
-		String_free( &(*self)->filepath );
+		String_free( &(*self)->filepath  );
+		String_free( &(*self)->extension );
 
 		(*self)->byteSize = 0;
 
@@ -309,7 +335,15 @@ IO_accept( IO* self, Address* peer, IO** connection )
 
 	if ( -1 == fd )
 	{
-		//PrintError( errno );
+		switch ( errno )
+		{
+		case EBADF:
+			// Ignore as expected if CTRL + C is received.
+			break;
+
+		default:
+			fprintf( stdout, "IO_accept: error: %i - %s\n", errno, strerror( errno ) );
+		}
 		return false;
 	}
 	else
@@ -321,9 +355,36 @@ IO_accept( IO* self, Address* peer, IO** connection )
 }
 
 int
+IO_sendFile( IO* self, IO* file )
+{
+	off_t           offset = 0;
+	off_t           len    = 0;
+	struct sf_hdtr* hdtr   = NULL;
+	int             flags  = 0;
+
+	int result = sendfile( file->descriptor, self->descriptor, offset, &len, hdtr, flags );
+
+	if ( -1 == result )
+	{
+		IO_PrintError( stdout );
+	}
+	return result;
+}
+
+int
 IO_write( IO* self, const char* ch )
 {
-	return write( self->descriptor, ch, strlen( ch ) );
+	int result = write( self->descriptor, ch, strlen( ch ) );
+
+	if ( -1 == result ) IO_PrintError( stdout );
+
+	return result;
+}
+
+void
+IO_close( IO* self )
+{
+	fclose( self->stream );
 }
 
 IO*
@@ -337,17 +398,6 @@ IO_Socket()
 	return IO_new( &fd );
 }
 
-int
-IO_SendFile( IO* self, IO* file )
-{
-	off_t           offset = 0;
-	off_t           len    = 0;
-	struct sf_hdtr* hdtr   = NULL;
-	int             flags  = 0;
-
-	return sendfile( file->descriptor, self->descriptor, offset, &len, hdtr, flags );
-}
-
 String*
 IO_readline( IO* self )
 {
@@ -358,16 +408,23 @@ IO_readline( IO* self )
 
 		if ( NULL != start )
 		{
-			char*  copy  = calloc( len + 1, sizeof( char ) );
-
-			strncpy( copy, start, len );
-			ret = String_new( copy );
-			free( copy );
+			char* copy = NewArray( sizeof(char), len + 1 );
+			{
+				strncpy( copy, start, len );
+				ret = String_new( copy );
+			}
+			CharString_free( &copy );
 
 			String_trimEnd( ret );
 		}
 	}
 	return ret;
+}
+
+void
+IO_PrintError( FILE* out )
+{
+	fprintf( out, "Error: (%i) %s\n", errno, strerror( errno ) );
 }
 
 static bool IsWhitespace( char ch )
@@ -450,7 +507,7 @@ char* Join( const char* dirname, const char* basename )
 
 	int len = len_dirname + len_basename + 1;
 
-	char* dst = calloc( len, sizeof( char ) );
+	char* dst = NewArray( sizeof(char), len );
 
 	strncpy( dst, dirname, len_dirname );
 
@@ -471,7 +528,7 @@ String_new( const char* ch )
 	if ( self )
 	{
 		self->length = strlen( ch );
-		self->data   = calloc( self->length + 1, sizeof( char ) );
+		self->data   = NewArray( sizeof( char ), self->length + 1 );
 
 		strcpy( self->data, ch );
 	}
@@ -501,6 +558,12 @@ int
 String_getLength( const String*  self )
 {
 	return self->length;
+}
+
+bool
+String_contains( const String*  self, const char* substring )
+{
+	return (NULL != strstr( self->data, substring ));
 }
 
 bool

@@ -33,9 +33,24 @@ Array_free( Array** self )
 	{
 		(*self)->count    = 0;
 		(*self)->capacity = DEFAULT_CAPACITY;
-		Delete( &(*self)->elements );
+		DeleteArray( &(*self)->elements );
 	}
-	return *self;
+	return Delete( self );
+}
+
+Array*
+Array_free_destructor( Array** self, void* (*free)( void** ) )
+{
+	if ( *self )
+	{
+		Array* _self = *self;
+
+		for ( int i=0; i < _self->capacity; i++ )
+		{
+			if ( _self->elements[i] ) _self->elements[i] = free( &_self->elements[i] );
+		}
+	}
+	return Array_free( self );
 }
 
 int
@@ -154,7 +169,7 @@ static void Array_resize( Array* self, int index )
 			elements[i] = self->elements[i]; self->elements[i] = 0;
 		}
 
-		Delete( &self->elements );
+		DeleteArray( &self->elements );
 
 		self->elements = elements;
 		self->capacity = new_size;

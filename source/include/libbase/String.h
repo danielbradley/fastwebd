@@ -6,6 +6,7 @@
 const char*   String_getChars              ( const String*  self );
       int     String_getLength             ( const String*  self );
 
+      bool    String_contains              ( const String*  self, const char* substring );
       bool    String_contentEquals         ( const String*  self, const char* string );
       String* String_extension             ( const String*, const char separator );
       bool    String_startsWith            ( const String*  self, const char* prefix );
