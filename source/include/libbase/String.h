@@ -17,6 +17,6 @@ const char*   String_getChars              ( const String*  self );
       String* String_trimEnd               (       String*  self );
 
 
-      String* XString_cat                   ( const String*  self, char optional, const String* other );
+      String* String_cat                   ( const String*  self, char optional, const String* other );
 
 #endif

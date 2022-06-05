@@ -20,7 +20,8 @@
 #define MIME_UNKNOWN    "application/binary"
 
 static const char* File_DetermineMimeType( const String* extension );
-static       char* Join( const char* dirname, const char* basename );
+//static
+       char* Join( const char* dirname, const char* basename );
 
 struct _Address
 {
@@ -432,13 +433,32 @@ Path* Path_CurrentDirectory()
 
 char* Join( const char* dirname, const char* basename )
 {
-	int len_dirname  = strlen( dirname  );
-	int len_basename = strlen( basename );
-	int len          = len_dirname + len_basename + 1;
+	int  len_dirname  = strlen( dirname  );
+	int  len_basename = strlen( basename );
+	bool insert_slash = false;
+
+	if
+	(
+		('/' != dirname[len_dirname - 1])
+		&&
+		('/' != basename[0] )
+	)
+	{
+		len_dirname++;
+		insert_slash = true;
+	}
+
+	int len = len_dirname + len_basename + 1;
 
 	char* dst = calloc( len, sizeof( char ) );
 
-	strncpy( dst,               dirname,  len_dirname  );
+	strncpy( dst, dirname, len_dirname );
+
+	if ( insert_slash )
+	{
+		dst[len_dirname - 1] = '/';
+	}
+
 	strncpy( dst + len_dirname, basename, len_basename );
 
 	return dst;

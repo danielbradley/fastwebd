@@ -9,6 +9,10 @@
 #define false 0
 #endif
 
+#ifndef null
+#define null 0
+#endif
+
 #include "libbase/types.h"
 #include "libbase/Address.h"
 #include "libbase/CharString.h"

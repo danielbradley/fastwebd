@@ -99,6 +99,7 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 		else
 		{
 			fprintf( stdout, "Request: %s\n", String_getChars( HTTPRequest_getStartLine( request ) ) );
+			fprintf( stdout, "Request: %s\n", String_getChars( HTTPRequest_getHost     ( request ) ) );
 
 			Path* resource = HTTPServer_DetermineFile__srvDir_request( srvDir, request );
 			{
@@ -110,7 +111,8 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 				{
 					const char* status = "HTTP/1.1 404 ERROR \r\n";
 
-					fprintf( stdout, "Response: %s", status  );
+					fprintf( stderr, "Response: %s", status  );
+					fprintf( stderr, "Response: %s\n", Path_getAbsolute( resource ) );
 
 					IO_write( connection, status );
 				}
@@ -145,20 +147,32 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 Path*
 HTTPServer_DetermineFile__srvDir_request( const Path* srvDir, const HTTPRequest* request )
 {
-	const String* resource = HTTPRequest_getResource( request );
-	const char*  _resource = String_getChars ( resource );
-	int           len      = String_getLength( resource ); 
+	Path* path = null;
 
-	Path* path = Path_child( srvDir, _resource );
+	const String* host     = HTTPRequest_getHost    ( request  );
+	const String* resource = HTTPRequest_getResource( request  );
+	const char*  _host     = String_getChars        ( host     );
+	const char*  _resource = String_getChars        ( resource );
+	int           len      = String_getLength       ( resource ); 
 
-	if ( '/' == _resource[len - 1] )
+	printf( "srv:      %s\n", Path_getAbsolute( srvDir ) );
+	printf( "host:     %s\n", _host     );
+	printf( "resource: %s\n", _resource );
+
+	Path* site = Path_child( srvDir, _host     );
 	{
-		Path* tmp = Path_child( path, "index.html" );
+		path = Path_child( site,   _resource );
 
-		Path_free( &path );
+		if ( '/' == _resource[len - 1] )
+		{
+			Path* tmp = Path_child( path, "index.html" );
 
-		path = tmp;
+			Path_free( &path );
+
+			path = tmp;
+		}
 	}
+	Path_free( &site );
 
 	return path;
 }
