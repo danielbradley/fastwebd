@@ -138,15 +138,14 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 			{
 				char  headers[1024];
 
-				File* file = File_new( Path_getAbsolute( resource ) );
+				const char* _path = Path_getAbsolute( resource );
+				File*        file = File_new        ( _path    );
 
 				if ( !File_exists( file ) )
 				{
 					const char* status = "HTTP/1.1 404 ERROR \r\n";
 
-					fprintf( stderr, "Response: %s", status  );
-					fprintf( stderr, "Response: %s\n", Path_getAbsolute( resource ) );
-
+					fprintf( stdout, "Response: %s (%s)", status, _path  );
 					IO_write( connection, status );
 				}
 				else
