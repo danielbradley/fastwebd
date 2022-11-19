@@ -12,12 +12,14 @@
 
 #define NOT_FOUND -1
 
-#define MIME_IMAGE_GIF  "image/gif"
-#define MIME_IMAGE_JPG  "image/jpeg"
-#define MIME_IMAGE_PNG  "image/png"
-#define MIME_TEXT_PLAIN "text/plain"
-#define MIME_TEXT_HTML  "text/html"
-#define MIME_UNKNOWN    "application/binary"
+#define MIME_UNKNOWN        "application/binary"
+#define MIME_APP_JS         "application/javascript"
+#define MIME_IMAGE_GIF      "image/gif"
+#define MIME_IMAGE_JPG      "image/jpeg"
+#define MIME_IMAGE_PNG      "image/png"
+#define MIME_TEXT_PLAIN     "text/plain"
+#define MIME_TEXT_HTML      "text/html"
+#define MIME_TEXT_HTML_UTF8 "text/html;charset=UTF-8"
 
 static const char* File_DetermineMimeType( const String* extension );
 static       void  IO_PrintError( FILE* out );
@@ -274,6 +276,21 @@ static const char* File_DetermineMimeType( const String* extension )
 	if ( String_startsWith( extension, ".html" ) )
 	{
 		return MIME_TEXT_HTML;
+	}
+	else
+	if ( String_startsWith( extension, ".css" ) )
+	{
+		return MIME_TEXT_HTML;
+	}
+	else
+	if ( String_startsWith( extension, ".js" ) )
+	{
+		return MIME_APP_JS;
+	}
+	else
+	if ( String_startsWith( extension, ".mjs" ) )
+	{
+		return MIME_APP_JS;
 	}
 	else
 	{
