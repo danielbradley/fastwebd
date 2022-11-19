@@ -21,8 +21,10 @@
 #define MIME_TEXT_HTML      "text/html"
 #define MIME_TEXT_HTML_UTF8 "text/html;charset=UTF-8"
 
-static const char* File_DetermineMimeType( const String* extension );
-static       void  IO_PrintError( FILE* out );
+static const char*   File_DetermineMimeType( const String* extension );
+static       void    IO_PrintError( FILE* out );
+static       String* FGetLine( FILE* stream, size_t* len );
+
 //static
        char* Join( const char* dirname, const char* basename );
 
@@ -418,24 +420,7 @@ IO_Socket()
 String*
 IO_readline( IO* self )
 {
-	String* ret = NULL;
-	{
-		size_t len;
-		char*  start = fgetln( self->stream, &len );
-
-		if ( NULL != start )
-		{
-			char* copy = NewArray( sizeof(char), len + 1 );
-			{
-				strncpy( copy, start, len );
-				ret = String_new( copy );
-			}
-			CharString_free( &copy );
-
-			String_trimEnd( ret );
-		}
-	}
-	return ret;
+	return FGetLine( self->stream, NULL );
 }
 
 void
@@ -671,4 +656,51 @@ String_trimEnd( String* self )
 		self->data[self->length] = '\0';
 	}
 	return self;
+}
+
+String*
+FGetLine( FILE* stream, size_t* len )
+{
+	String* line = NULL;
+	{
+		size_t sz     = 1024;
+		char*  buffer = NewArray( sizeof( char ), sz );
+		size_t i      = 0;
+		bool   loop   = true;
+
+		do
+		{
+			if ( (sz - 1) == i )
+			{
+				sz *= 2;
+				buffer = realloc( buffer, sz * sizeof( char ) );
+			}
+
+			int ch = fgetc( stream );
+
+			switch ( ch )
+			{
+			case EOF:
+				loop = false;
+				break;
+
+			case '\n':
+				buffer[i++] = ch;
+				loop        = false;
+
+			default:
+				buffer[i++] = ch;
+			}
+
+		} while ( loop );
+
+		line = String_new    ( buffer );
+		line = String_trimEnd( line   );
+
+		if ( len ) *len = i;
+
+		DeleteArray( &buffer );
+
+	}
+	return line;
 }
