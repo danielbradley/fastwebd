@@ -22,6 +22,8 @@ struct _HTTPRequest
 	String* resource;
 	String* version;
 	String* host;
+	String* port;
+	String* origin;
 	Array*  headers;
 };
 
@@ -37,6 +39,8 @@ HTTPRequest_new()
 		self->resource  = String_new( "" );
 		self->version   = String_new( "" );
 		self->host      = String_new( "" );
+		self->port      = String_new( "" );
+		self->origin    = String_new( "" );
 		self->headers   = Array_new();
 	}
 	return self;
@@ -52,6 +56,8 @@ HTTPRequest_free( HTTPRequest** self )
 		String_free( &(*self)->resource  );
 		String_free( &(*self)->version   );
 		String_free( &(*self)->host      );
+		String_free( &(*self)->port      );
+		String_free( &(*self)->origin    );
 		Array_free_destructor( &(*self)->headers, (void* (*)( void** )) HTTPHeader_free );
 	}
 
@@ -70,6 +76,8 @@ HTTPRequest_setStartLine( HTTPRequest* self, const char* startLine )
 	String_free( &self->startLine );
 
 	self->startLine = String_new( startLine );
+
+	String_trimEnd( self->startLine );
 }
 
 void
@@ -78,6 +86,8 @@ HTTPRequest_setMethod( HTTPRequest* self, const char* method )
 	String_free( &self->method );
 
 	self->method = String_new( method );
+
+	String_trimEnd( self->method );
 }
 
 void
@@ -86,6 +96,8 @@ HTTPRequest_setResource( HTTPRequest* self, const char* resource )
 	String_free( &self->resource );
 
 	self->resource = String_new( resource );
+
+	String_trimEnd( self->resource );
 }
 
 void
@@ -94,6 +106,38 @@ HTTPRequest_setVersion ( HTTPRequest* self, const char* version  )
 	String_free( &self->version );
 
 	self->version = String_new( version );
+
+	String_trimEnd( self->version );
+}
+
+void
+HTTPRequest_setHost    ( HTTPRequest* self, const char* host )
+{
+	String_free( &self->host );
+
+	self->host = String_new( host );
+
+	String_trimEnd( self->host );
+}
+
+void
+HTTPRequest_setPort    ( HTTPRequest* self, const char* port )
+{
+	String_free( &self->port );
+
+	self->port = String_new( port );
+
+	String_trimEnd( self->port );
+}
+
+void
+HTTPRequest_setOrigin  ( HTTPRequest* self, const char* origin )
+{
+	String_free( &self->origin );
+
+	self->origin = String_new( origin );
+
+	String_trimEnd( self->origin );
 }
 
 const String*
@@ -103,19 +147,19 @@ HTTPRequest_getStartLine( const HTTPRequest* self )
 }
 
 const String*
-HTTPRequest_getMethod( const HTTPRequest* self )
+HTTPRequest_getMethod( const HTTPRequest*    self )
 {
 	return self->method;
 }
 
 const String*
-HTTPRequest_getResource( const HTTPRequest* self )
+HTTPRequest_getResource( const HTTPRequest*  self )
 {
 	return self->resource;
 }
 
 const String*
-HTTPRequest_getVersion ( const HTTPRequest* self )
+HTTPRequest_getVersion ( const HTTPRequest*  self )
 {
 	return self->version;
 }
@@ -126,11 +170,37 @@ HTTPRequest_getHost    ( const HTTPRequest*  self )
 	return self->host;
 }
 
+const String*
+HTTPRequest_getPort    ( const HTTPRequest*  self )
+{
+	return self->port;
+}
+
+const String*
+HTTPRequest_getOrigin  ( const HTTPRequest*  self )
+{
+	return self->origin;
+}
+
 void
 HTTPRequest_validate( HTTPRequest* self )
 {
-	self->valid =   String_contentEquals( self->method,   "GET"      )
-	            &&  String_contentEquals( self->version,  "HTTP/1.1" )
+	self->valid =   
+	            (
+					String_contentEquals( self->method,   "POST"     )
+					||
+					String_contentEquals( self->method,   "GET"      )
+					||
+					String_contentEquals( self->method,   "HEAD"     )
+					||
+					String_contentEquals( self->method,   "OPTIONS"  )
+				)
+	            &&
+	            (
+	            	String_contentEquals( self->version,  "HTTP/1.0" )
+	            	||
+	            	String_contentEquals( self->version,  "HTTP/1.1" )
+	            )
 	            && !String_contentEquals( self->host,     ""         )
 	            && !String_contains     ( self->resource, ".."       );
 }
@@ -172,29 +242,46 @@ HTTPRequest_Parse( IO* connection )
 			{
 				if ( (line = HTTPRequest_ReadLine( connection )) )
 				{
-					int len = String_getLength( line );
+					String_trimEnd( line );
 					{
-						HTTPHeader* header = HTTPHeader_new( &line );
-
-						if ( String_contentEquals( header->name, "Host" ) )
+						int len = String_getLength( line );
 						{
-							int index;
-							String_free( &request->host );
+							HTTPHeader* header = HTTPHeader_new( &line );
 
-							if ( -1 == (index = String_indexOf_ch_skip( header->value, ':', 0 )) )
+							if ( String_contentEquals( header->name, "Host" ) )
 							{
-								request->host = String_substring_index( header->value, 0 );
+								const String* value = HTTPHeader_getValue( header );
+
+								if ( String_contains( value, ":" ) )
+								{
+									int index = String_indexOf_ch_skip( value, ':', 0 );
+									String* host = String_substring_index_length( value,     0, index );
+									String* port = String_substring_index       ( value, index        );
+									{
+										HTTPRequest_setHost( request, String_getChars( host ) );
+										HTTPRequest_setPort( request, String_getChars( port ) );
+									}
+									String_free( &host );
+									String_free( &port );
+								}
+								else
+								{
+									HTTPRequest_setHost( request, String_getChars( value ) );
+								}
 							}
 							else
+							if ( String_contentEquals( header->name, "Origin" ) )
 							{
-								request->host = String_substring_index_length( header->value, 0, index );
-							}
-						}
-						fprintf( stdout, "[%s][%s]\n", String_getChars( header->name ), String_getChars( header->value ) );
+								const String* value = HTTPHeader_getValue( header );
 
-						Array_append_element( request->headers, (void**) &header );
+								HTTPRequest_setOrigin( request, String_getChars( value ) );
+							}
+							//printf( stdout, "[%s][%s]\n", String_getChars( header->name ), String_getChars( header->value ) );
+
+							Array_append_element( request->headers, (void**) &header );
+						}
+						if ( 0 == len ) loop = false;
 					}
-					if ( 0 == len ) loop = false;
 				}
 				else
 				{
@@ -242,15 +329,34 @@ HTTPHeader_free( HTTPHeader** self )
 	return Delete( self );
 }
 
+const String*
+HTTPHeader_getName( const HTTPHeader* self )
+{
+	return self->name;
+}
+
+const String*
+HTTPHeader_getValue( const HTTPHeader* self )
+{
+	return self->value;
+}
+
 String*
 HTTPHeader_ExtractHeaderName( const String* line )
 {
 	//	012345678901234567890
 	//	Host: 127.0.0.1:8080
 
-	int index = String_indexOf_ch_skip( line, ':', 0 );
+	if ( String_getLength( line ) )
+	{
+		int index = String_indexOf_ch_skip( line, ':', 0 );
 
-	return String_substring_index_length( line, 0, index );
+		return String_substring_index_length( line, 0, index );
+	}
+	else
+	{
+		return String_new( "" );
+	}
 }
 
 String*
@@ -259,12 +365,19 @@ HTTPHeader_ExtractHeaderValue( const String* line )
 	//	012345678901234567890
 	//	Host: 127.0.0.1:8080
 
-	const char* chx   = String_getChars       ( line         );
-	      int   len   = String_getLength      ( line         );
-	      int   index = String_indexOf_ch_skip( line, ':', 0 ) + 1;
+	if ( String_getLength( line ) )
+	{
+		const char* chx   = String_getChars       ( line         );
+		      int   len   = String_getLength      ( line         );
+		      int   index = String_indexOf_ch_skip( line, ':', 0 ) + 1;
 
-	while ( (index < len) && (' ' == chx[index]) ) index++;
+		while ( (index < len) && (' ' == chx[index]) ) index++;
 
-	return (index < len) ? String_substring_index( line, index ) : String_new( "" );
+		return (index < len) ? String_substring_index( line, index ) : String_new( "" );
+	}
+	else
+	{
+		return String_new( "" );
+	}
 }
 
