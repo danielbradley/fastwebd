@@ -19,7 +19,9 @@
 #include "libbase/File.h"
 #include "libbase/IO.h"
 #include "libbase/Path.h"
+#include "libbase/Security.h"
 #include "libbase/String.h"
+#include "libbase/StringBuffer.h"
 
 void* New     ( int    size            );
 void* NewArray( int    size, int count );

@@ -4,11 +4,14 @@
 #include <fcntl.h>
 #include <libgen.h>
 #include <netinet/ip.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
+#include <uuid/uuid.h>
 
 #define NOT_FOUND -1
 
@@ -58,6 +61,13 @@ struct _Path
 
 struct _String
 {
+	int   length;
+	char* data;
+};
+
+struct _StringBuffer
+{
+	int   capacity;
 	int   length;
 	char* data;
 };
@@ -140,6 +150,12 @@ char*
 CharString_free( char** self )
 {
 	return DeleteArray( self );
+}
+
+int
+CharString_length( const char* self )
+{
+	return strlen( self );
 }
 
 File* File_new ( const char* filepath )
@@ -315,9 +331,8 @@ IO* IO_free( IO** self )
 {
 	if ( *self )
 	{
-		fclose( (*self)->stream ); (*self)->stream = NULL;
-		(*self)->descriptor = 0;
-
+		fclose( (*self)->stream     ); (*self)->stream     = NULL;
+		close ( (*self)->descriptor ); (*self)->descriptor = 0;
 	}
 	return Delete( self );
 }
@@ -488,6 +503,88 @@ Path* Path_CurrentDirectory()
 	free( cwd );
 
 	return path;
+}
+
+void
+Security_DropPrivilegesOrAbort()
+{
+	/* Pretty sure that this code assumes something is being run using sudo
+	 * and so has a getguid value that is not 0 (root).
+	 */
+
+	uid_t  uid = getuid();
+	uid_t euid = geteuid();
+	gid_t  gid = getgid();
+	gid_t egid = getegid();
+
+	struct passwd* nobody = getpwnam( "nobody" );
+
+	fprintf( stdout, "Existing privileges, uid: %i, euid: %i, gid: %i egid: %i\n", uid, euid, gid, egid );
+
+	if ( 0 != uid )
+	{
+		fprintf( stdout, "Keeping existing privileges\n" );
+	}
+	else
+	if ( !nobody )
+	{
+		fprintf( stdout, "Aborting: could not retrieve details of unprivileged 'nobody' account.\n" );
+		abort();
+	}
+	else
+	{
+		gid_t groups[2];
+
+		if ( 0 != setgid( nobody->pw_gid ) )
+		{
+			fprintf( stdout, "Aborting: error calling setgid to drop root group privileges.\n" );
+			abort();
+		}
+		else
+		if ( nobody->pw_gid != getgid() )
+		{
+			fprintf( stdout, "Aborting: group not changed to expected value, expected: %i, got: %i.\n", nobody->pw_gid, getgid() );
+			abort();
+		}
+		else
+		{
+			fprintf( stdout, "Dropped root group privileges\n" );
+		}
+
+		groups[0] = nobody->pw_gid;
+
+		if ( 0 != setgroups( 1, groups ) )
+		{
+			fprintf( stdout, "Aborting: error calling setgroups to drop root groups list.\n" );
+			abort();
+		}
+		else
+		if ( (1 != getgroups( 2, groups )) && (nobody->pw_gid == groups[0]) )
+		{
+			fprintf( stdout, "Aborting: group list contains more goups than the one expected, found %i groups.\n", getgroups( 0, groups ) );
+			abort();
+		}
+		else
+		{
+			fprintf( stdout, "Dropped root supplementary groups privileges\n" );
+		}
+
+		if ( 0 != setuid( nobody->pw_uid ) )
+		{
+			fprintf( stdout, "Aborting: error calling setuid to drop root userprivileges.\n" );
+			abort();
+		}
+		else
+		if ( nobody->pw_uid != getgid() )
+		{
+			fprintf( stdout, "Aborting: user not changed to expected value, expected: %i, got: %i.\n", nobody->pw_uid, getuid() );
+			abort();
+		}
+		else
+		{
+			fprintf( stdout, "Dropped root user privileges\n" );
+		}
+	}
 }
 
 char* Join( const char* dirname, const char* basename )
@@ -703,4 +800,100 @@ FGetLine( FILE* stream, size_t* len )
 
 	}
 	return line;
+}
+
+StringBuffer*
+StringBuffer_new()
+{
+	StringBuffer* self = New( sizeof( StringBuffer ) );
+	if ( self )
+	{
+		self->capacity = 1;
+		self->length   = 0;
+		self->data     = NewArray( sizeof( char ), self->capacity );
+	}
+
+	return self;
+}
+
+StringBuffer*
+StringBuffer_free( StringBuffer** self )
+{
+	if ( *self )
+	{
+		(*self)->capacity = 0;
+		(*self)->length   = 0;
+
+		CharString_free( &(*self)->data );
+	}
+	return Delete( self );
+}
+
+void
+StringBuffer_append_chars( StringBuffer* self, const char* chars )
+{
+	//	self->capacity = 16;
+	//	self->length   = 8;
+	//	self->data     = "Original00000000"
+	//	chars          = "NewString"
+
+	int charlen = CharString_length( chars );		// 9
+	int newlen  = self->length + charlen;		// 17 = 8 + 9
+	int oldcap  = self->capacity;			// 16
+
+	while ( newlen > (self->capacity - 1) )
+	{
+		self->capacity *= 2;				// 32
+	}
+
+	if ( oldcap != self->capacity )
+	{
+										//  0123456789X123456789X123456789X12
+		self->data = realloc( self->data, self->capacity );	// "Original00000000################"
+
+		for ( int i=oldcap; i < self->capacity; i++ )
+		{
+			self->data[i] = '\0';
+		}
+										//                  |<------------>|
+										//  0123456789X123456789X123456789X12
+										// "Original000000000000000000000000"
+	}
+
+	for ( int i=0; i < charlen; i++ )
+	{
+		self->data[self->length + i] = chars[i];
+	}
+
+										//          |<----->|
+										//  0123456789X123456789X123456789X12
+										// "OriginalNewString000000000000000"
+
+	self->length = newlen;
+}
+
+void
+StringBuffer_append_string( StringBuffer* self, const String* string )
+{
+	StringBuffer_append_chars( self, String_getChars( string ) );
+}
+
+void
+StringBuffer_append_number( StringBuffer*  self, int number )
+{
+	int digits = abs(number / 10) + 1;
+
+	char* buffer = NewArray( sizeof( char ), digits + 1 );
+
+	sprintf( buffer, "%i", number );
+
+	StringBuffer_append_chars( self, buffer );
+
+	DeleteArray( &buffer );
+}
+
+const char*
+StringBuffer_getChars( const StringBuffer* self )
+{
+	return self->data;
 }
