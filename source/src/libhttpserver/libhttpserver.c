@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <signal.h>
+#include <unistd.h>
+#include <strings.h>
 
 #include "libbase.h"
 #include "libhttp.h"
@@ -24,11 +26,12 @@ void signalHandler( int signal )
 	IO_close( ServerSocket );
 
 	printf( "Signal: %i\n", signal );
+	//fprintf( stdout, " \b\b\b" );
 }
 
 void ignoreSigpipe( int signal )
 {
-	printf( "Signal: %i - ignoring SIGPIE\n", signal );
+	printf( "Signal: %i - ignoring SIGPIPE\n", signal );
 }
 
 struct _HTTPServer
@@ -78,6 +81,8 @@ HTTPServer_listen( HTTPServer* self )
 	{
 		printf( "Bound socket to loopback\n" );
 
+		Security_DropPrivilegesOrAbort();
+
 		if ( IO_listen( self->socket ) )
 		{
 			printf( "Listening on port: %i\n", self->port );
@@ -96,8 +101,13 @@ HTTPServer_acceptConnections( HTTPServer* self )
 
 	while ( KeepAlive && IO_accept( self->socket, peer, &connection ) )
 	{
+		int factor = 1000;
+
+		usleep( 1 * factor );
+
 		HTTPServer_Process_srvDir_connection( srvDir, connection );
 		IO_free( &connection );
+
 	}
 
 	Path_free( &srvDir );
@@ -121,51 +131,90 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 {
 	HTTPRequest* request = HTTPRequest_Parse( connection );
 	{
+		const String* start_line = HTTPRequest_getStartLine( request );
+		const String* host       = HTTPRequest_getHost     ( request );
+		const String* port       = HTTPRequest_getPort     ( request );
+		const String* method     = HTTPRequest_getMethod   ( request );
+		const String* origin     = HTTPRequest_getOrigin   ( request );
+
+		fprintf( stdout, "Request: %s\n", String_getChars( start_line ) );
+		fprintf( stdout, "Method:  %s\n", String_getChars( method     ) );
+		fprintf( stdout, "Host:    %s\n", String_getChars( host       ) );
+		fprintf( stdout, "Port:    %s\n", String_getChars( port       ) );
+		fprintf( stdout, "Origin:  %s\n", String_getChars( origin     ) );
+
 		if ( !HTTPRequest_isValid( request ) )
 		{
-			const char* status = "HTTP/1.1 400 BAD_REQUEST \r\n";
+			const char* status = "HTTP/1.0 400 BAD_REQUEST \r\n";
 
 			IO_write( connection, status );
 		}
 		else
 		if ( 1 )
 		{
-			fprintf( stdout, "Request: %s\n", String_getChars( HTTPRequest_getStartLine( request ) ) );
-			fprintf( stdout, "Request: %s\n", String_getChars( HTTPRequest_getHost     ( request ) ) );
-
 			Path* resource = HTTPServer_DetermineFile__srvDir_request( srvDir, request );
+
 			if ( 1 )
 			{
-				char  headers[1024];
+				char  headers[1024]; bzero( headers, 1024 );
 
 				const char* _path = Path_getAbsolute( resource );
 				File*        file = File_new        ( _path    );
 
 				if ( !File_exists( file ) )
 				{
-					const char* status = "HTTP/1.1 404 ERROR \r\n";
+					const char* status = "HTTP/1.0 404 ERROR \r\n";
+					const char* end    = "\r\n";
 
 					fprintf( stdout, "Response: %s (%s)", status, _path  );
 					IO_write( connection, status );
+					IO_write( connection, end    );
+				}
+				else
+				if ( String_contentEquals( method, "OPTIONS" ) )
+				{
+					const char* status = "HTTP/1.1 204 No Content \r\n";
+					const char* end    = "\r\n";
+				
+					sprintf( headers, "Connection: close\r\nAccess-Control-Allow-Origin: %s\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, HEAD\r\nAccess-Control-Allow-Private-Network: true\r\nAccess-Control-Max-Age: 86400\r\n", String_getChars( origin ) );
+		
+					IO_write( connection, status  );
+					IO_write( connection, headers );
+					IO_write( connection, end     );
+
+					fprintf( stdout, "Options Response: %s", status  );
+					fprintf( stdout, "Options Response: %s", headers );
 				}
 				else
 				if ( 1 )
 				{
-					const char* status    = "HTTP/1.1 200 OK \r\n";
+					const char* status    = "HTTP/1.0 200 OK \r\n";
 					const char* end       = "\r\n";
 					const char* mime_type = File_getMimeType( file );
 
 					File_open( file );
 
-					sprintf( headers, "Content-Type: %s\r\nContent-Length: %lli\r\n\r\n", mime_type, File_getByteSize( file ) + 2 );
+					if ( String_getLength( origin ) )
+					{
+						sprintf( headers, "Content-Type: %s\r\nContent-Length: %lli\r\nAccess-Control-Allow-Origin: %s\r\nAccess-Control-Allow-Methods: POST, GET, HEAD, PUT, OPTIONS, PATCH, DELETE\r\nAccess-Control-Allow-Credentials: false\r\nConnection: Close\r\n\r\n", mime_type, File_getByteSize( file ) + 2, String_getChars( origin ) );
+					}
+					else
+					{
+						sprintf( headers, "Content-Type: %s\r\nContent-Length: %lli\r\nAccess-Control-Allow-Methods: POST, GET, HEAD, PUT, OPTIONS, PATCH, DELETE\r\nAccess-Control-Allow-Credentials: false\r\nConnection: Close\r\n\r\n", mime_type, File_getByteSize( file ) + 2 );
+					}
+
+					IO_write   ( connection, status             );
+					IO_write   ( connection, "" );
+					IO_write   ( connection, headers            );
+
+					if ( !String_contentEquals( method, "HEAD" ) )
+					{
+						IO_sendFile( connection, File_getIO( file ) );
+					}
+					IO_write   ( connection, end                );
 
 					fprintf( stdout, "Response: %s", status  );
 					fprintf( stdout, "Response: %s", headers );
-
-					IO_write   ( connection, status             );
-					IO_write   ( connection, headers            );
-					IO_sendFile( connection, File_getIO( file ) );
-					IO_write   ( connection, end                );
 				}
 
 				File_free( &file );
@@ -188,9 +237,9 @@ HTTPServer_DetermineFile__srvDir_request( const Path* srvDir, const HTTPRequest*
 	const char*  _resource = String_getChars        ( resource );
 	int           len      = String_getLength       ( resource ); 
 
-	printf( "srv:      %s\n", Path_getAbsolute( srvDir ) );
-	printf( "host:     %s\n", _host     );
-	printf( "resource: %s\n", _resource );
+	fprintf( stdout, "srv:      %s\n", Path_getAbsolute( srvDir ) );
+	fprintf( stdout, "host:     %s\n", _host     );
+	fprintf( stdout, "resource: %s\n", _resource );
 
 	Path* site = Path_child( srvDir, _host );
 	{
