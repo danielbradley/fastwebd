@@ -1,9 +1,19 @@
 
+#include <stdlib.h>
 #include "libhttpserver.h"
 
-int main()
+int main( int argc, char** argv )
 {
-	HTTPServer* server = HTTPServer_new_port( 8080 );
+    int port = 8080;
+    
+    if ( argc > 1 )
+    {
+        port = atoi( argv[1] );
+        
+        if ( !port ) port = 8080;
+    }
+
+	HTTPServer* server = HTTPServer_new_port( port );
 
 	if ( !server )
 	{
