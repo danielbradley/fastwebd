@@ -20,6 +20,7 @@
 #define MIME_IMAGE_GIF      "image/gif"
 #define MIME_IMAGE_JPG      "image/jpeg"
 #define MIME_IMAGE_PNG      "image/png"
+#define MIME_TEXT_CSS       "text/css"
 #define MIME_TEXT_PLAIN     "text/plain"
 #define MIME_TEXT_HTML      "text/html"
 #define MIME_TEXT_HTML_UTF8 "text/html;charset=UTF-8"
@@ -261,52 +262,52 @@ File* File_open( File* self )
 
 static const char* File_DetermineMimeType( const String* extension )
 {
-	if ( String_startsWith( extension, ".gif" ) )
+	if ( String_endsWith( extension, ".gif" ) )
 	{
 		return MIME_IMAGE_GIF;
 	}
 	else
-	if ( String_startsWith( extension, ".png" ) )
+	if ( String_endsWith( extension, ".png" ) )
 	{
 		return MIME_IMAGE_PNG;
 	}
 	else
-	if ( String_startsWith( extension, ".jpg" ) )
+	if ( String_endsWith( extension, ".jpg" ) )
 	{
 		return MIME_IMAGE_JPG;
 	}
 	else
-	if ( String_startsWith( extension, ".jpeg" ) )
+	if ( String_endsWith( extension, ".jpeg" ) )
 	{
 		return MIME_IMAGE_JPG;
 	}
 	else
-	if ( String_startsWith( extension, ".txt" ) )
+	if ( String_endsWith( extension, ".txt" ) )
 	{
 		return MIME_TEXT_PLAIN;
 	}
 	else
-	if ( String_startsWith( extension, ".htm" ) )
+	if ( String_endsWith( extension, ".htm" ) )
 	{
 		return MIME_TEXT_HTML;
 	}
 	else
-	if ( String_startsWith( extension, ".html" ) )
+	if ( String_endsWith( extension, ".html" ) )
 	{
 		return MIME_TEXT_HTML;
 	}
 	else
-	if ( String_startsWith( extension, ".css" ) )
+	if ( String_endsWith( extension, ".css" ) )
 	{
-		return MIME_TEXT_HTML;
+		return MIME_TEXT_CSS;
 	}
 	else
-	if ( String_startsWith( extension, ".js" ) )
+	if ( String_endsWith( extension, ".js" ) )
 	{
 		return MIME_APP_JS;
 	}
 	else
-	if ( String_startsWith( extension, ".mjs" ) )
+	if ( String_endsWith( extension, ".mjs" ) )
 	{
 		return MIME_APP_JS;
 	}
@@ -669,6 +670,47 @@ bool
 String_contentEquals( const String* self, const char* string )
 {
 	return (0 == strcmp( self->data, string ));
+}
+
+bool
+String_endsWith( const String* self, const char* suffix )
+{
+    const char* aString = self->data;
+    
+    int len1 = strlen( suffix );
+
+    if ( 0 == len1 )
+    {
+        return 0;
+    }
+    else
+    {
+        int len2 = strlen( aString );
+
+        if ( len1 > len2 )
+        {
+            return 0;
+        }
+        else
+        {
+            const char* _suffix = &(suffix [len1]);
+            const char* _string = &(aString[len2]);
+
+            do
+            {
+                _suffix--;
+                _string--;
+
+                if ( _suffix == suffix )
+                {
+                    return (*_suffix == *_string);
+                }
+            }
+            while ( *_suffix == *_string );
+
+            return 0;
+        }
+    }
 }
 
 String*

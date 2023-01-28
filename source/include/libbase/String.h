@@ -8,6 +8,8 @@ const char*   String_getChars              ( const String*  self );
 
       bool    String_contains              ( const String*  self, const char* substring );
       bool    String_contentEquals         ( const String*  self, const char* string );
+      bool    String_endsWith              ( const String*  self, const char* suffix );
+
       String* String_extension             ( const String*, const char separator );
       bool    String_startsWith            ( const String*  self, const char* prefix );
       String* String_substring_index       ( const String*  self, int index );
