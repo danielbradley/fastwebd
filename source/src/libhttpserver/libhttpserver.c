@@ -156,8 +156,6 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 
 			if ( 1 )
 			{
-				char  headers[1024]; bzero( headers, 1024 );
-
 				const char* _path = Path_getAbsolute( resource );
 				File*        file = File_new        ( _path    );
 
@@ -173,48 +171,73 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 				else
 				if ( String_contentEquals( method, "OPTIONS" ) )
 				{
-					const char* status = "HTTP/1.1 204 No Content \r\n";
-					const char* end    = "\r\n";
-				
-					sprintf( headers, "Connection: close\r\nAccess-Control-Allow-Origin: %s\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, HEAD\r\nAccess-Control-Allow-Private-Network: true\r\nAccess-Control-Max-Age: 86400\r\n", String_getChars( origin ) );
-		
-					IO_write( connection, status  );
-					IO_write( connection, headers );
-					IO_write( connection, end     );
+					StringBuffer* headers = StringBuffer_new();
+					{
+						const char* status = "HTTP/1.1 204 No Content \r\n";
+						const char* end    = "\r\n";
 
-					fprintf( stdout, "Options Response: %s", status  );
-					fprintf( stdout, "Options Response: %s", headers );
+						StringBuffer_append_chars( headers, "Connection: close\r\n" );
+						StringBuffer_append_chars( headers, "Access-Control-Allow-Origin: " );
+						StringBuffer_append_chars( headers, String_getChars( origin ) );
+						StringBuffer_append_chars( headers, end );
+						StringBuffer_append_chars( headers, "Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, HEAD\r\n" );
+						StringBuffer_append_chars( headers, "Access-Control-Allow-Private-Network: true\r\n" );
+						StringBuffer_append_chars( headers, "Access-Control-Max-Age: 86400\r\n" );
+			
+						IO_write( connection, status                           );
+						IO_write( connection, StringBuffer_getChars( headers ) );
+						IO_write( connection, end                              );
+
+						fprintf( stdout, "Options Response: %s", status                           );
+						fprintf( stdout, "Options Response: %s", StringBuffer_getChars( headers ) );
+					}
+					StringBuffer_free( &headers );
 				}
 				else
 				if ( 1 )
 				{
-					const char* status    = "HTTP/1.0 200 OK \r\n";
-					const char* end       = "\r\n";
-					const char* mime_type = File_getMimeType( file );
-
-					File_open( file );
-
-					if ( String_getLength( origin ) )
+					StringBuffer* headers = StringBuffer_new();
 					{
-						sprintf( headers, "Content-Type: %s\r\nContent-Length: %lli\r\nAccess-Control-Allow-Origin: %s\r\nAccess-Control-Allow-Methods: POST, GET, HEAD, PUT, OPTIONS, PATCH, DELETE\r\nAccess-Control-Allow-Credentials: false\r\nConnection: Close\r\n\r\n", mime_type, File_getByteSize( file ) + 2, String_getChars( origin ) );
-					}
-					else
-					{
-						sprintf( headers, "Content-Type: %s\r\nContent-Length: %lli\r\nAccess-Control-Allow-Methods: POST, GET, HEAD, PUT, OPTIONS, PATCH, DELETE\r\nAccess-Control-Allow-Credentials: false\r\nConnection: Close\r\n\r\n", mime_type, File_getByteSize( file ) + 2 );
-					}
+						const char* status    = "HTTP/1.0 200 OK \r\n";
+						const char* end       = "\r\n";
 
-					IO_write   ( connection, status             );
-					IO_write   ( connection, "" );
-					IO_write   ( connection, headers            );
+						File_open( file );
 
-					if ( !String_contentEquals( method, "HEAD" ) )
-					{
-						IO_sendFile( connection, File_getIO( file ) );
+						StringBuffer_append_chars ( headers, "Content-Type: " );
+						StringBuffer_append_chars ( headers, File_getMimeType( file ) );
+						StringBuffer_append_chars ( headers, end );
+
+						StringBuffer_append_chars ( headers, "Content-Length: " );
+						StringBuffer_append_number( headers, File_getByteSize( file ) + 2 );
+						StringBuffer_append_chars ( headers, end );
+
+						if ( String_getLength( origin ) )
+						{
+							StringBuffer_append_chars( headers, "Access-Control-Allow-Origin: " );
+							StringBuffer_append_chars( headers, String_getChars( origin ) );
+							StringBuffer_append_chars ( headers, end );
+						}
+
+						StringBuffer_append_chars( headers, "Access-Control-Allow-Methods: POST, GET, HEAD, PUT, OPTIONS, PATCH, DELETE\r\n" );
+						StringBuffer_append_chars( headers, "Access-Control-Allow-Credentials: false\r\n" );
+						StringBuffer_append_chars( headers, "Connection: Close\r\n" );
+						StringBuffer_append_chars ( headers, end );
+
+						const char* _headers = StringBuffer_getChars( headers );
+
+						IO_write( connection,  status  );
+						IO_write( connection, _headers );
+
+						if ( !String_contentEquals( method, "HEAD" ) )
+						{
+							IO_sendFile( connection, File_getIO( file ) );
+						}
+						IO_write   ( connection, end );
+
+						fprintf( stdout, "Response: %s", status                           );
+						fprintf( stdout, "Response: %s", StringBuffer_getChars( headers ) );
 					}
-					IO_write   ( connection, end                );
-
-					fprintf( stdout, "Response: %s", status  );
-					fprintf( stdout, "Response: %s", headers );
+					StringBuffer_free( &headers );
 				}
 
 				File_free( &file );
