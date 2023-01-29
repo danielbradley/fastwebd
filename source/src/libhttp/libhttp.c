@@ -1,7 +1,6 @@
 #include <stdio.h>
 
 #include "libbase.h"
-#include "libadt.h"
 #include "libhttp.h"
 
 static void    HTTP_validate( HTTPRequest* self );
