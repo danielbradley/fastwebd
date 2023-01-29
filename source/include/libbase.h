@@ -15,6 +15,8 @@
 
 #include "libbase/types.h"
 #include "libbase/Address.h"
+#include "libbase/Array.h"
+#include "libbase/ArrayOfFile.h"
 #include "libbase/CharString.h"
 #include "libbase/File.h"
 #include "libbase/IO.h"
@@ -23,11 +25,14 @@
 #include "libbase/String.h"
 #include "libbase/StringBuffer.h"
 
-void* New     ( int    size            );
-void* NewArray( int    size, int count );
-void* Del     ( void** ptrptr          );
-void* DelArray( void** ptrptr          );
-int   Exit    ( int    exit            );
+void*  New     ( int    size            );
+void*  NewArray( int    size, int count );
+void*  Del     ( void** ptrptr          );
+void*  DelArray( void** ptrptr          );
+int    Exit    ( int    exit            );
+void** Give    ( void*  pointer         );
+void   Swap    ( void*  one, void* two  );
+void*  Take    ( void*  giver           );
 
 #define Delete( self )      Del( (void**) self )
 #define DeleteArray( self ) DelArray( (void**) self )

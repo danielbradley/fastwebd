@@ -24,6 +24,8 @@
 #define MIME_TEXT_PLAIN     "text/plain"
 #define MIME_TEXT_HTML      "text/html"
 #define MIME_TEXT_HTML_UTF8 "text/html;charset=UTF-8"
+#define DEFAULT_CAPACITY    255
+#define NOT_FOUND          -1
 
 static const char*   File_DetermineMimeType( const String* extension );
 static       void    IO_PrintError( FILE* out );
@@ -34,6 +36,20 @@ static       String* FGetLine( FILE* stream, size_t* len );
 
 static int Objects = 0;
 static int Arrays  = 0;
+
+struct _Array
+{
+	int    count;
+	int    capacity;
+	void** elements;
+};
+
+struct _ArrayOfFile
+{
+	Array* files;
+};
+
+static void Array_resize( Array* self, int index );
 
 struct _Address
 {
@@ -114,6 +130,206 @@ int Exit( int exit )
 	if ( Objects + Arrays ) printf( "Objects: %i, Arrays: %i\n", Objects, Arrays );
 
 	return exit;
+}
+
+Array*
+Array_new()
+{
+	Array* self = New( sizeof( Array ) );
+	if ( self )
+	{
+		self->count    = 0;
+		self->capacity = DEFAULT_CAPACITY;
+		self->elements = NewArray( sizeof( void* ), self->capacity );
+	}
+	return self;
+}
+
+Array*
+Array_free( Array** self )
+{
+	if ( *self )
+	{
+		(*self)->count    = 0;
+		(*self)->capacity = DEFAULT_CAPACITY;
+		DeleteArray( &(*self)->elements );
+	}
+	return Delete( self );
+}
+
+Array*
+Array_free_destructor( Array** self, void* (*free)( void** ) )
+{
+	if ( *self )
+	{
+		Array* _self = *self;
+
+		for ( int i=0; i < _self->capacity; i++ )
+		{
+			if ( _self->elements[i] ) _self->elements[i] = free( &_self->elements[i] );
+		}
+	}
+	return Array_free( self );
+}
+
+int
+Array_count( const Array* self )
+{
+	return self->count;
+}
+
+int
+Array_getFirstIndex( const Array* self )
+{
+	int index = 0;
+
+	while ( (index < self->capacity) && !self->elements[index] ) index++;
+
+	if ( index == self->capacity )
+	{
+		return NOT_FOUND;
+	}
+	else
+	{
+		return index;
+	}
+}
+
+int
+Array_getLastIndex( const Array* self )
+{
+	int index = self->capacity;
+
+	while ( (0 < index) && !self->elements[index - 1] ) index--;
+
+	if ( 0 == index )
+	{
+		return NOT_FOUND;
+	}
+	else
+	{
+		return index;
+	}
+}
+
+const void*
+Array_getFirst( const Array* self )
+{
+	int index = Array_getFirstIndex( self );
+
+	return (NOT_FOUND == index) ? null : Array_get_index( self, index );
+}
+
+const void* Array_get_index( const Array* self, int index )
+{
+	return (0 <= index) && (index < self->capacity) ? self->elements[index] : null;
+}
+
+const void*
+Array_getLast( const Array* self )
+{
+	int index = Array_getLastIndex( self );
+
+	return (NOT_FOUND == index) ? null : Array_get_index( self, index );
+}
+
+void
+Array_append_element( Array* self, void** element )
+{
+	int index = Array_getLastIndex( self );
+
+	index = (NOT_FOUND == index) ? 0 : index + 1;
+
+	Array_replace_element_index( self, index, element );
+
+	self->count++;
+}
+
+void*
+Array_replace_element_index( Array* self, int index, void** element )
+{
+	Array_resize( self, index );
+
+	void* ret = self->elements[index];
+
+	if ( element && *element )
+	{
+		self->elements[index] = *element; *element = null;
+	}
+
+	return ret;
+}
+
+void*
+Array_remove_index( Array* self, int index )
+{
+	void* ret = null;
+
+	if ( (0 <= index) && (index < self->capacity) )
+	{
+		ret = self->elements[index]; self->elements[index] = null;
+	}
+	return null;
+}
+
+static void Array_resize( Array* self, int index )
+{
+	int new_size = self->capacity;
+
+	while ( new_size < (index + 1) )
+	{
+		new_size = new_size + new_size;
+	}
+
+	if ( self->capacity != new_size )
+	{
+		void** elements = NewArray( sizeof(void*), new_size );
+
+		for ( int i=0; i < self->capacity; i++ )
+		{
+			elements[i] = self->elements[i]; self->elements[i] = 0;
+		}
+
+		DeleteArray( &self->elements );
+
+		self->elements = elements;
+		self->capacity = new_size;
+	}
+}
+
+ArrayOfFile* ArrayOfFile_new()
+{
+	ArrayOfFile* self = New( sizeof(ArrayOfFile) );
+	if ( self )
+	{
+		self->files = Array_new();
+	}
+	return self;
+}
+
+ArrayOfFile* ArrayOfFile_free( ArrayOfFile** self )
+{
+	if ( *self )
+	{
+		Array_free_destructor( &(*self)->files, (void *(*)(void **)) File_free );
+		Array_free( &(*self)->files );
+	}
+	return Delete( self );
+}
+
+void ArrayOfFile_append_file( ArrayOfFile* self, File** file )
+{
+	Array_append_element( self->files, (void**) file );
+}
+
+int ArrayOfFile_count( const ArrayOfFile* self )
+{
+	return Array_count( self->files );
+}
+
+const File* ArrayOfFile_get_index( const ArrayOfFile* self, int index )
+{
+	return (const File*) Array_get_index( self->files, index );
 }
 
 Address*
@@ -201,6 +417,11 @@ long long File_getByteSize( const File* self )
 const String* File_getExtension( const File* self )
 {
 	return self->extension;
+}
+
+const String* File_getFilePath( const File* self )
+{
+	return self->filepath;
 }
 
 const char* File_getMimeType( const File* self )
@@ -315,6 +536,19 @@ static const char* File_DetermineMimeType( const String* extension )
 	{
 		return MIME_UNKNOWN;
 	}
+}
+
+static void* stash[100];
+
+void** Give( void* pointer )
+{
+	void** tmp = stash;
+
+	while ( *tmp ) tmp++;
+
+	*tmp = pointer;
+
+	return tmp;
 }
 
 IO* IO_new( FD* descriptor )
@@ -938,4 +1172,24 @@ const char*
 StringBuffer_getChars( const StringBuffer* self )
 {
 	return self->data;
+}
+
+void Swap( void* _one, void* _two )
+{
+	void** one = _one;
+	void** two = _two;
+	void*  tmp;
+
+	tmp  = *one;
+	*one = *two;
+	*two =  tmp;
+}
+
+void* Take( void* given )
+{
+	void** _given = (void**) given;
+
+	void* keeper = *_given; *_given = null;
+
+	return keeper;
 }

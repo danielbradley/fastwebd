@@ -4,8 +4,10 @@
 File*         File_new          ( const char*   filepath );
 File*         File_free         (       File**  self     );
 IO*           File_getIO        ( const File*   self     );
+
 long long     File_getByteSize  ( const File*   self     );
 const String* File_getExtension ( const File*   self     );
+const String* File_getFilePath  ( const File*   self     );
 const char*   File_getMimeType  ( const File*   self     );
 
 bool          File_exists       ( const File*   self     );
