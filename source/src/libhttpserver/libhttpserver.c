@@ -7,8 +7,8 @@
 #include "libhttp.h"
 #include "libhttpserver.h"
 
-static void    HTTPServer_Process_srvDir_connection    ( const Path* srvDir,       IO*          connection );
-static Path*   HTTPServer_DetermineFile__srvDir_request( const Path* srvDir, const HTTPRequest* request    );
+static void         HTTPServer_Process_srvDir_connection     ( const Path* srvDir,       IO*          connection );
+static ArrayOfFile* HTTPServer_DetermineFiles__srvDir_request( const Path* srvDir, const HTTPRequest* request    );
 
 static IO*     ServerSocket;
 static bool    KeepAlive = true;
@@ -103,6 +103,9 @@ HTTPServer_acceptConnections( HTTPServer* self )
 	{
 		int factor = 1000;
 
+		/*
+		 *	Kludge to stop Safari from crashing.
+		 */
 		usleep( 1 * factor );
 
 		HTTPServer_Process_srvDir_connection( srvDir, connection );
@@ -152,132 +155,141 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 		else
 		if ( 1 )
 		{
-			Path* resource = HTTPServer_DetermineFile__srvDir_request( srvDir, request );
+            ArrayOfFile* files = HTTPServer_DetermineFiles__srvDir_request( srvDir, request );
 
-			if ( 1 )
-			{
-				const char* _path = Path_getAbsolute( resource );
-				File*        file = File_new        ( _path    );
+            if ( !files )
+            {
+                const char* status = "HTTP/1.0 404 ERROR \r\n";
+                const char* end    = "\r\n";
 
-				if ( !File_exists( file ) )
-				{
-					const char* status = "HTTP/1.0 404 ERROR \r\n";
-					const char* end    = "\r\n";
+                //fprintf( stdout, "Response: %s (%s)", status, String_getChars( File_getFilePath( file ) ) );
+                IO_write( connection, status );
+                IO_write( connection, end    );
+            }
+            else
+            if ( String_contentEquals( method, "OPTIONS" ) )
+            {
+                StringBuffer* headers = StringBuffer_new();
+                {
+                    const char* status = "HTTP/1.1 204 No Content \r\n";
+                    const char* end    = "\r\n";
 
-					fprintf( stdout, "Response: %s (%s)", status, _path  );
-					IO_write( connection, status );
-					IO_write( connection, end    );
-				}
-				else
-				if ( String_contentEquals( method, "OPTIONS" ) )
-				{
-					StringBuffer* headers = StringBuffer_new();
-					{
-						const char* status = "HTTP/1.1 204 No Content \r\n";
-						const char* end    = "\r\n";
+                    StringBuffer_append_chars( headers, "Connection: close\r\n" );
+                    StringBuffer_append_chars( headers, "Access-Control-Allow-Origin: " );
+                    StringBuffer_append_chars( headers, String_getChars( origin ) );
+                    StringBuffer_append_chars( headers, end );
+                    StringBuffer_append_chars( headers, "Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, HEAD\r\n" );
+                    StringBuffer_append_chars( headers, "Access-Control-Allow-Private-Network: true\r\n" );
+                    StringBuffer_append_chars( headers, "Access-Control-Max-Age: 86400\r\n" );
+        
+                    IO_write( connection, status                           );
+                    IO_write( connection, StringBuffer_getChars( headers ) );
+                    IO_write( connection, end                              );
 
-						StringBuffer_append_chars( headers, "Connection: close\r\n" );
-						StringBuffer_append_chars( headers, "Access-Control-Allow-Origin: " );
-						StringBuffer_append_chars( headers, String_getChars( origin ) );
-						StringBuffer_append_chars( headers, end );
-						StringBuffer_append_chars( headers, "Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, HEAD\r\n" );
-						StringBuffer_append_chars( headers, "Access-Control-Allow-Private-Network: true\r\n" );
-						StringBuffer_append_chars( headers, "Access-Control-Max-Age: 86400\r\n" );
-			
-						IO_write( connection, status                           );
-						IO_write( connection, StringBuffer_getChars( headers ) );
-						IO_write( connection, end                              );
+                    fprintf( stdout, "Options Response: %s", status                           );
+                    fprintf( stdout, "Options Response: %s", StringBuffer_getChars( headers ) );
+                }
+                StringBuffer_free( &headers );
+            }
+            else
+            if ( 1 )
+            {
+                StringBuffer* headers = StringBuffer_new();
+                {
+                    const char* status    = "HTTP/1.0 200 OK \r\n";
+                    const char* end       = "\r\n";
 
-						fprintf( stdout, "Options Response: %s", status                           );
-						fprintf( stdout, "Options Response: %s", StringBuffer_getChars( headers ) );
-					}
-					StringBuffer_free( &headers );
-				}
-				else
-				if ( 1 )
-				{
-					StringBuffer* headers = StringBuffer_new();
-					{
-						const char* status    = "HTTP/1.0 200 OK \r\n";
-						const char* end       = "\r\n";
+					const File* file = ArrayOfFile_get_index( files, 0 );
 
-						File_open( file );
+                    File_open( (File*) file );
 
-						StringBuffer_append_chars ( headers, "Content-Type: " );
-						StringBuffer_append_chars ( headers, File_getMimeType( file ) );
-						StringBuffer_append_chars ( headers, end );
+                    StringBuffer_append_chars ( headers, "Content-Type: " );
+                    StringBuffer_append_chars ( headers, File_getMimeType( file ) );
+                    StringBuffer_append_chars ( headers, end );
 
-						StringBuffer_append_chars ( headers, "Content-Length: " );
-						StringBuffer_append_number( headers, File_getByteSize( file ) + 2 );
-						StringBuffer_append_chars ( headers, end );
+                    StringBuffer_append_chars ( headers, "Content-Length: " );
+                    StringBuffer_append_number( headers, File_getByteSize( file ) + 2 );
+                    StringBuffer_append_chars ( headers, end );
 
-						if ( String_getLength( origin ) )
-						{
-							StringBuffer_append_chars( headers, "Access-Control-Allow-Origin: " );
-							StringBuffer_append_chars( headers, String_getChars( origin ) );
-							StringBuffer_append_chars ( headers, end );
-						}
+                    if ( String_getLength( origin ) )
+                    {
+                        StringBuffer_append_chars( headers, "Access-Control-Allow-Origin: " );
+                        StringBuffer_append_chars( headers, String_getChars( origin ) );
+                        StringBuffer_append_chars ( headers, end );
+                    }
 
-						StringBuffer_append_chars( headers, "Access-Control-Allow-Methods: POST, GET, HEAD, PUT, OPTIONS, PATCH, DELETE\r\n" );
-						StringBuffer_append_chars( headers, "Access-Control-Allow-Credentials: false\r\n" );
-						StringBuffer_append_chars( headers, "Connection: Close\r\n" );
-						StringBuffer_append_chars ( headers, end );
+                    StringBuffer_append_chars( headers, "Access-Control-Allow-Methods: POST, GET, HEAD, PUT, OPTIONS, PATCH, DELETE\r\n" );
+                    StringBuffer_append_chars( headers, "Access-Control-Allow-Credentials: false\r\n" );
+                    StringBuffer_append_chars( headers, "Connection: Close\r\n" );
+                    StringBuffer_append_chars ( headers, end );
 
-						const char* _headers = StringBuffer_getChars( headers );
+                    const char* _headers = StringBuffer_getChars( headers );
 
-						IO_write( connection,  status  );
-						IO_write( connection, _headers );
+                    IO_write( connection,  status  );
+                    IO_write( connection, _headers );
 
-						if ( !String_contentEquals( method, "HEAD" ) )
-						{
-							IO_sendFile( connection, File_getIO( file ) );
-						}
-						IO_write   ( connection, end );
+                    if ( !String_contentEquals( method, "HEAD" ) )
+                    {
+                        IO_sendFile( connection, File_getIO( file ) );
+                    }
+                    IO_write   ( connection, end );
 
-						fprintf( stdout, "Response: %s", status                           );
-						fprintf( stdout, "Response: %s", StringBuffer_getChars( headers ) );
-					}
-					StringBuffer_free( &headers );
-				}
-
-				File_free( &file );
+                    fprintf( stdout, "Response: %s", status                           );
+                    fprintf( stdout, "Response: %s", StringBuffer_getChars( headers ) );
+                }
+                StringBuffer_free( &headers );
 			}
-			Path_free( &resource );
+			ArrayOfFile_free( &files );
 		}
 		fprintf( stdout, "END\n" );
 	}
 	HTTPRequest_free( &request );
 }
 
-Path*
-HTTPServer_DetermineFile__srvDir_request( const Path* srvDir, const HTTPRequest* request )
+ArrayOfFile*
+HTTPServer_DetermineFiles__srvDir_request( const Path* srvDir, const HTTPRequest* request )
 {
-	Path* path = null;
+	ArrayOfFile* files = ArrayOfFile_new();
 
 	const String* host     = HTTPRequest_getHost    ( request  );
 	const String* resource = HTTPRequest_getResource( request  );
 	const char*  _host     = String_getChars        ( host     );
 	const char*  _resource = String_getChars        ( resource );
-	int           len      = String_getLength       ( resource ); 
+	int           len      = String_getLength       ( resource );
 
 	fprintf( stdout, "srv:      %s\n", Path_getAbsolute( srvDir ) );
 	fprintf( stdout, "host:     %s\n", _host     );
 	fprintf( stdout, "resource: %s\n", _resource );
 
-	Path* site = Path_child( srvDir, _host );
+	Path* path = null;
 	{
-		path = Path_child( site,   _resource );
-
-		if ( '/' == _resource[len - 1] )
+		Path* site = Path_child( srvDir, _host );
 		{
-			Path* tmp = Path_child( path, "index.html" );
-
-			Path_free( &path );
-
-			path = tmp;
+			path = Path_child( site,   _resource );
+			
+			if ( '/' == _resource[len - 1] )
+			{
+				Path* tmp = Path_child( path, "index.html" );
+				
+				Path_free( &path );
+				
+				path = tmp;
+			}
+		}
+		Path_free( &site );
+		
+		File* file = File_new( Path_getAbsolute( path ) );
+		if ( File_exists( file ) )
+		{
+			ArrayOfFile_append_file( files, &file );
+		}
+		else
+		{
+			File_free( &file );
+			ArrayOfFile_free( &files );
 		}
 	}
-	Path_free( &site );
-
-	return path;
+	Path_free( &path );
+	
+	return files;
 }
