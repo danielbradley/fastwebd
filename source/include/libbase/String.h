@@ -18,8 +18,7 @@ const char*   String_getChars              ( const String*  self );
 
       String* String_deroot                (       String*  self );
       String* String_trimEnd               (       String*  self );
-
-
-      String* String_cat                   ( const String*  self, char optional, const String* other );
+      Array*  String_toArray_separator     ( const String*  self, char separator );
+      String* String_reverseParts_separator( const String*  self, char separator );
 
 #endif

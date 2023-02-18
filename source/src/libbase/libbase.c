@@ -28,7 +28,6 @@
 #define NOT_FOUND          -1
 
 static const char*   File_DetermineMimeType( const String* extension );
-static       void    IO_PrintError( FILE* out );
 static       String* FGetLine( FILE* stream, size_t* len );
 
 //static
@@ -198,11 +197,11 @@ Array_getFirstIndex( const Array* self )
 int
 Array_getLastIndex( const Array* self )
 {
-	int index = self->capacity;
+	int index = self->capacity - 1;
 
-	while ( (0 < index) && !self->elements[index - 1] ) index--;
+	while ( (-1 < index) && !self->elements[index] ) index--;
 
-	if ( 0 == index )
+	if ( -1 == index )
 	{
 		return NOT_FOUND;
 	}
@@ -269,7 +268,11 @@ Array_remove_index( Array* self, int index )
 	{
 		ret = self->elements[index]; self->elements[index] = null;
 	}
-	return null;
+    if ( ret )
+    {
+        self->count--;
+    }
+    return ret;
 }
 
 static void Array_resize( Array* self, int index )
@@ -297,6 +300,38 @@ static void Array_resize( Array* self, int index )
 	}
 }
 
+String*
+Array_joinStrings_separator_number( const Array* self, char separator, int number )
+{
+    String*       joined = null;
+    StringBuffer* buffer = StringBuffer_new();
+    {
+        char sep[2] = { separator, '\0' };
+        int count = Array_count( self );
+
+        if ( count )
+        {
+            for ( int i=0; i < count; i++ )
+            {
+                if ( number-- > 0 )
+                {
+                    StringBuffer_append_string( buffer, (String*) Array_get_index( self, i ) );
+
+                    if ( i < (count-1) )
+                    {
+                        StringBuffer_append_chars( buffer, sep );
+                    }
+                }
+            }
+        }
+    }
+    joined = String_new( StringBuffer_getChars( buffer ) );
+
+    StringBuffer_free( &buffer );
+
+    return joined;
+}
+
 ArrayOfFile* ArrayOfFile_new()
 {
 	ArrayOfFile* self = New( sizeof(ArrayOfFile) );
@@ -319,7 +354,9 @@ ArrayOfFile* ArrayOfFile_free( ArrayOfFile** self )
 
 void ArrayOfFile_append_file( ArrayOfFile* self, File** file )
 {
-	Array_append_element( self->files, (void**) file );
+	void* f = Take( (void**) file );
+
+	Array_append_element( self->files, &f );
 }
 
 int ArrayOfFile_count( const ArrayOfFile* self )
@@ -330,6 +367,21 @@ int ArrayOfFile_count( const ArrayOfFile* self )
 const File* ArrayOfFile_get_index( const ArrayOfFile* self, int index )
 {
 	return (const File*) Array_get_index( self->files, index );
+}
+
+int
+ArrayOfFile_sizeOfFiles( const ArrayOfFile* self )
+{
+	int size = 0;
+	int n    = ArrayOfFile_count( self );
+
+	for ( int i=0; i < n; i++ )
+	{
+		const File* file = ArrayOfFile_get_index( self, i );
+		size += File_getByteSize( file );
+	}
+
+	return size;
 }
 
 Address*
@@ -377,12 +429,19 @@ CharString_length( const char* self )
 
 File* File_new ( const char* filepath )
 {
+	struct stat buf;
+
 	File* self = New( sizeof( File ) );
 	if ( self )
 	{
 		self->filepath  = String_new( filepath );
 		self->extension = String_extension( self->filepath, '.' );
 		self->mimeType  = File_DetermineMimeType( self->extension );
+
+		if ( -1 != lstat( filepath, &buf ) )
+		{
+			self->byteSize = buf.st_size;
+		}
 	}
 	return self;
 }
@@ -479,6 +538,26 @@ File* File_open( File* self )
 	}
 
 	return self;
+}
+
+File* File_close( File* self )
+{
+	IO_close( self->io );
+
+	return self;
+}
+
+File* File_CreateIfExists_path( Path** path )
+{
+	Path* _path = Take( (void**) path );
+	File*  file = File_new( Path_getAbsolute( _path ) );
+	if ( !File_exists( file ) )
+	{
+		File_free( &file );
+	}
+	Path_free( &_path );
+
+	return file;
 }
 
 static const char* File_DetermineMimeType( const String* extension )
@@ -621,23 +700,6 @@ IO_accept( IO* self, Address* peer, IO** connection )
 
 		return true;
 	}
-}
-
-int
-IO_sendFile( IO* self, IO* file )
-{
-	off_t           offset = 0;
-	off_t           len    = 0;
-	struct sf_hdtr* hdtr   = NULL;
-	int             flags  = 0;
-
-	int result = sendfile( file->descriptor, self->descriptor, offset, &len, hdtr, flags );
-
-	if ( -1 == result )
-	{
-		IO_PrintError( stdout );
-	}
-	return result;
 }
 
 int
@@ -1031,6 +1093,77 @@ String_trimEnd( String* self )
 	return self;
 }
 
+Array*
+String_toArray_separator( const String* self, char separator )
+{
+    Array* parts = Array_new();
+
+    int loop  = 1;
+    int start = 0;
+    int skip  = 0;
+
+    do
+    {
+        int index = String_indexOf_ch_skip( self, separator, skip );
+
+        if ( -1 != index )
+        {
+            int len = index - start;
+
+            if ( len > 0 )
+            {
+                String* part = String_substring_index_length( self, start, len );
+                Array_append_element( parts, (void**) &part );
+            }
+
+            start = index + 1;
+            skip++;
+        }
+        else
+        {
+            String* part = String_substring_index( self, start );
+            if ( String_getLength( part ) > 0 )
+            {
+                Array_append_element( parts, (void**) &part );
+            }
+            loop = 0;
+        }
+    }
+    while ( loop );
+
+    return parts;
+}
+
+String*
+String_reverseParts_separator( const String* self, char separator )
+{
+	String*       reversed = null;
+	StringBuffer* buffer   = StringBuffer_new();
+	{
+		Array* parts = String_toArray_separator( self, separator );
+		char sep[2] = { separator, '\0' };
+		int count = Array_count( parts );
+
+		if ( count )
+		{
+			for ( int i=count-1; i > -1; i-- )
+			{
+				StringBuffer_append_string( buffer, (String*) Array_get_index( parts, i ) );
+				if ( i )
+				{
+					StringBuffer_append_chars( buffer, sep );
+				}
+			}
+		}
+        Array_free_destructor( &parts, (void *(*)(void **)) String_free );
+	}
+	reversed = String_new( StringBuffer_getChars( buffer ) );
+
+	StringBuffer_free( &buffer );
+
+	return reversed;
+}
+
 String*
 FGetLine( FILE* stream, size_t* len )
 {
@@ -1185,11 +1318,9 @@ void Swap( void* _one, void* _two )
 	*two =  tmp;
 }
 
-void* Take( void* given )
+void* TakeElement( void** given )
 {
-	void** _given = (void**) given;
-
-	void* keeper = *_given; *_given = null;
+	void* keeper = *given; *given = null;
 
 	return keeper;
 }

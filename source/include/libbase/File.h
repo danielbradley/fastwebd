@@ -13,5 +13,8 @@ const char*   File_getMimeType  ( const File*   self     );
 bool          File_exists       ( const File*   self     );
 String*       File_readLine     ( const File*   self     );
 File*         File_open         (       File*   self     );
+File*         File_close        (       File*   self     );
+
+File*         File_CreateIfExists_path( Path** path );
 
 #endif

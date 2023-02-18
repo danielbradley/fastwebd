@@ -25,16 +25,16 @@
 #include "libbase/String.h"
 #include "libbase/StringBuffer.h"
 
-void*  New     ( int    size            );
-void*  NewArray( int    size, int count );
-void*  Del     ( void** ptrptr          );
-void*  DelArray( void** ptrptr          );
-int    Exit    ( int    exit            );
-void** Give    ( void*  pointer         );
-void   Swap    ( void*  one, void* two  );
-void*  Take    ( void*  giver           );
+void*  New        ( int    size            );
+void*  NewArray   ( int    size, int count );
+void*  Del        ( void** ptrptr          );
+void*  DelArray   ( void** ptrptr          );
+int    Exit       ( int    exit            );
+void** Give       ( void*  pointer         );
+void   Swap       ( void*  one, void* two  );
+void*  TakeElement( void** given           );
 
 #define Delete( self )      Del( (void**) self )
 #define DeleteArray( self ) DelArray( (void**) self )
-
+#define Take( self )        TakeElement( (void**) self )
 #endif
