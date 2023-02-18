@@ -533,7 +533,7 @@ File* File_open( File* self )
 	else
 	{
 		int fd         = open( fpath, O_RDONLY );
-		self->io       = IO_new( &fd );
+		self->io       = IO_open_mode( IO_new( &fd ), "r" );
 		self->byteSize = buf.st_size;
 	}
 
@@ -542,7 +542,7 @@ File* File_open( File* self )
 
 File* File_close( File* self )
 {
-	IO_close( self->io );
+	IO_free( &self->io );
 
 	return self;
 }
@@ -635,8 +635,8 @@ IO* IO_new( FD* descriptor )
 	IO* self = New( sizeof( IO ) );
 	if ( self )
 	{
-		self->descriptor = *descriptor; *descriptor = 0;
-		self->stream     = fdopen( self->descriptor, "r" );
+		self->descriptor  = *descriptor; *descriptor = 0;
+		self->stream      = null;
 	}
 	return self;
 }
@@ -645,12 +645,11 @@ IO* IO_free( IO** self )
 {
 	if ( *self )
 	{
-		fclose( (*self)->stream     ); (*self)->stream     = NULL;
-		close ( (*self)->descriptor ); (*self)->descriptor = 0;
+		IO_close( *self );
+		close ( (*self)->descriptor  ); (*self)->descriptor = 0;
 	}
-	return Delete( self );
+	Delete( self );
 }
-
 
 bool IO_bind( IO* self, Address* toAddress )
 {
@@ -696,10 +695,19 @@ IO_accept( IO* self, Address* peer, IO** connection )
 	}
 	else
 	{
-		*connection = IO_new( &fd );
+		*connection = IO_open_mode( IO_new( &fd ), "r+" );
 
 		return true;
 	}
+}
+
+IO* IO_open_mode( IO* self, const char* mode )
+{
+	if ( self->descriptor )
+	{
+		self->stream = fdopen( self->descriptor, mode );
+	}
+	return self;
 }
 
 int
@@ -715,7 +723,10 @@ IO_write( IO* self, const char* ch )
 void
 IO_close( IO* self )
 {
-	fclose( self->stream );
+	if ( self->stream )
+	{
+		fclose( self->stream  ); self->stream = NULL;
+	}
 }
 
 IO*

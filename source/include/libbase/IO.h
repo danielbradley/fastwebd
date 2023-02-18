@@ -9,6 +9,7 @@ bool    IO_bind      ( IO*   self, Address* toAddress );
 bool    IO_listen    ( IO*   self );
 bool    IO_accept    ( IO*   self, Address* peer, IO** connection );
 int     IO_sendFile  ( IO*   self, IO* file );
+IO*     IO_open_mode ( IO*   self, const char* mode );
 int     IO_write     ( IO*   self, const char* ch );
 String* IO_readline  ( IO*   self );
 void    IO_close     ( IO*   self );
