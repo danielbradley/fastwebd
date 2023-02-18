@@ -646,9 +646,8 @@ IO* IO_free( IO** self )
 	if ( *self )
 	{
 		IO_close( *self );
-		close ( (*self)->descriptor  ); (*self)->descriptor = 0;
 	}
-	Delete( self );
+	return Delete( self );
 }
 
 bool IO_bind( IO* self, Address* toAddress )
@@ -723,7 +722,12 @@ IO_write( IO* self, const char* ch )
 void
 IO_close( IO* self )
 {
-	if ( self->stream )
+    if ( self->descriptor )
+    {
+        close ( self->descriptor ); self->descriptor = 0;
+    }
+
+    if ( self->stream )
 	{
 		fclose( self->stream  ); self->stream = NULL;
 	}
