@@ -7,8 +7,12 @@
 #include "libhttp.h"
 #include "libhttpserver.h"
 
-static void         HTTPServer_Process_srvDir_connection     ( const Path* srvDir,       IO*          connection );
-static ArrayOfFile* HTTPServer_DetermineFiles__srvDir_request( const Path* srvDir, const HTTPRequest* request    );
+static void         HTTPServer_Process_srvDir_connection                 ( const Path*  srvDir,        IO*          connection                                                 );
+static ArrayOfFile* HTTPServer_DetermineFiles__srvDir_request            ( const Path*  srvDir,  const HTTPRequest* request                                                    );
+static void         HTTPServer_DiscoverFilesFrom_siteDir_resources_files ( const Path*  siteDir, const String*      resource,                         ArrayOfFile* const files );
+File*               JuxtaPage_FindFile_siteDir_jxPathParts_filename      ( const Path* siteDir,  const Array*       jxPathParts, const char* filename                          );
+void                JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files( const Path* siteDir,  const Array*       jxPathParts, const char* pattern, ArrayOfFile* const files );
+
 
 static IO*     ServerSocket;
 static bool    KeepAlive = true;
@@ -106,7 +110,7 @@ HTTPServer_acceptConnections( HTTPServer* self )
 		/*
 		 *	Kludge to stop Safari from crashing.
 		 */
-		usleep( 1 * factor );
+		usleep( 10 * factor );
 
 		HTTPServer_Process_srvDir_connection( srvDir, connection );
 		IO_free( &connection );
@@ -201,14 +205,12 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 
 					const File* file = ArrayOfFile_get_index( files, 0 );
 
-                    File_open( (File*) file );
-
                     StringBuffer_append_chars ( headers, "Content-Type: " );
                     StringBuffer_append_chars ( headers, File_getMimeType( file ) );
                     StringBuffer_append_chars ( headers, end );
 
                     StringBuffer_append_chars ( headers, "Content-Length: " );
-                    StringBuffer_append_number( headers, File_getByteSize( file ) + 2 );
+                    StringBuffer_append_number( headers, ArrayOfFile_sizeOfFiles( files ) + 2 );
                     StringBuffer_append_chars ( headers, end );
 
                     if ( String_getLength( origin ) )
@@ -230,7 +232,19 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 
                     if ( !String_contentEquals( method, "HEAD" ) )
                     {
+						File_open( (File*) file );
                         IO_sendFile( connection, File_getIO( file ) );
+						File_close( (File*) file );
+
+						int n = ArrayOfFile_count( files );
+
+						for ( int i=1; i < n; i++ )
+						{
+							const File* file = ArrayOfFile_get_index( files, i );
+							File_open( (File*) file );
+							IO_sendFile( connection, File_getIO( file ) );
+							File_close( (File*) file );
+						}
                     }
                     IO_write   ( connection, end );
 
@@ -246,50 +260,413 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 	HTTPRequest_free( &request );
 }
 
+static
+Path*
+GenerateAltPath( const Path* site_dir, const String* resource )
+{
+    Path* alt_path = null;
+
+    if ( String_startsWith( resource, "/resources/" ) )
+    {
+        //   01234567890
+        //  "/resources/"
+        //
+        String* real_resource = String_substring_index( resource, 10 );
+        StringBuffer* buffer  = StringBuffer_new();
+        {
+            StringBuffer_append_chars ( buffer, "/_resources/" );
+            StringBuffer_append_string( buffer, real_resource  );
+
+            alt_path = Path_child( site_dir, StringBuffer_getChars( buffer ) );
+        }
+        String_free      ( &real_resource );
+        StringBuffer_free( &buffer        );
+    }
+    return alt_path;
+}
+
 ArrayOfFile*
 HTTPServer_DetermineFiles__srvDir_request( const Path* srvDir, const HTTPRequest* request )
 {
 	ArrayOfFile* files = ArrayOfFile_new();
 
-	const String* host     = HTTPRequest_getHost    ( request  );
-	const String* resource = HTTPRequest_getResource( request  );
-	const char*  _host     = String_getChars        ( host     );
-	const char*  _resource = String_getChars        ( resource );
-	int           len      = String_getLength       ( resource );
+	const char*  _srv          = Path_getAbsolute             ( srvDir        );
+	const String* host         = HTTPRequest_getHost          ( request       );
+	const char*  _host         = String_getChars              ( host          );
+	const String* resource     = HTTPRequest_getResource      ( request       );
+	const char*  _resource     = String_getChars              ( resource      );
+	int           len          = String_getLength             ( resource      );
+	String*       reverse_host = String_reverseParts_separator( host, '.'     );
+	const char*  _reverse_host = String_getChars              ( reverse_host  );
 
-	fprintf( stdout, "srv:      %s\n", Path_getAbsolute( srvDir ) );
-	fprintf( stdout, "host:     %s\n", _host     );
-	fprintf( stdout, "resource: %s\n", _resource );
+	fprintf( stdout, "host:     %s --> %s\n", _host, _reverse_host            );
+	fprintf( stdout, "srv:      %s\n",        _srv                            );
+	fprintf( stdout, "resource: %s\n",        _resource                       );
+	fprintf( stdout, "target:   %s/%s%s\n",   _srv, _reverse_host, _resource );
 
+    Path* alt  = null;
 	Path* path = null;
 	{
-		Path* site = Path_child( srvDir, _host );
+		Path* site_dir = Path_child( srvDir, _reverse_host );
 		{
-			path = Path_child( site,   _resource );
-			
-			if ( '/' == _resource[len - 1] )
+            alt  = GenerateAltPath( site_dir,  resource );
+            path = Path_child     ( site_dir, _resource );
+
+			if ( 1 )
 			{
-				Path* tmp = Path_child( path, "index.html" );
-				
-				Path_free( &path );
-				
-				path = tmp;
+				if ( '/' == _resource[len - 1] )
+				{
+                    HTTPServer_DiscoverFilesFrom_siteDir_resources_files( site_dir, resource, files );
+
+					if ( 0 == ArrayOfFile_count( files ) )
+					{
+						ArrayOfFile_free( &files );
+					}
+				}
+                else
+                {
+                    File* file = File_new( Path_getAbsolute( path ) );
+                    if ( File_exists( file ) )
+                    {
+                        ArrayOfFile_append_file( files, &file );
+                    }
+                    else
+                    {
+                        File* alt_file = alt ? File_new( Path_getAbsolute( alt ) ) : null;
+                        if ( alt_file && File_exists( alt_file ) )
+                        {
+                            ArrayOfFile_append_file( files, &alt_file );
+                        }
+                        else
+                        {
+                            File_free( &file );
+                            ArrayOfFile_free( &files );
+                        }
+                    }
+                }
+			}
+			else
+			{
+				if ( '/' == _resource[len - 1] )
+				{
+					Path* tmp = Path_child( path, "index.html" );
+
+					Path_free( &path );
+
+					path = tmp;
+				}
+
+				File* file = File_new( Path_getAbsolute( path ) );
+				if ( File_exists( file ) )
+				{
+					ArrayOfFile_append_file( files, &file );
+				}
+				else
+				{
+					File_free( &file );
+					ArrayOfFile_free( &files );
+				}
 			}
 		}
-		Path_free( &site );
-		
-		File* file = File_new( Path_getAbsolute( path ) );
-		if ( File_exists( file ) )
-		{
-			ArrayOfFile_append_file( files, &file );
-		}
+		Path_free( &site_dir );
+	}
+	Path_free  ( &path         );
+	String_free( &reverse_host );
+
+	return files;
+}
+
+void
+HTTPServer_DiscoverFilesFrom_siteDir_resources_files( const Path* siteDir, const String* resource, ArrayOfFile* const files )
+{
+	File* f;
+
+	if ( (f = File_CreateIfExists_path( (Path**) Give( Path_child( siteDir, "index.html" ) ) )) )
+	{
+		ArrayOfFile_append_file( files, &f );
+	}
+	else
+	{
+		//	resource = "/"                  --> "/_content/_index/
+		//           = "/somepage/"         --> "/_content/somepage/"
+		//			 = "/somepage/subpage/" --> "/_content/somepage-subpage/"
+		//
+		//
+		//
+
+        Array* jx_path_parts = String_toArray_separator( resource, '/' );
+
+        if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "document.htm" )) )
+        {
+            ArrayOfFile_append_file( files, &f );
+        }
 		else
 		{
-			File_free( &file );
-			ArrayOfFile_free( &files );
+			if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "html_start.htm" )) )
+			{
+				ArrayOfFile_append_file( files, &f );
+			}
+
+			if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "head.htm" )) )
+			{
+				ArrayOfFile_append_file( files, &f );
+			}
+			else
+			{
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "head_start.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "title.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "meta.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "csp.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+
+                if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "link.htm" )) )
+                {
+                    ArrayOfFile_append_file( files, &f );
+                }
+                JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files( siteDir, jx_path_parts, "link?.htm", files );
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "styles.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+                JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files( siteDir, jx_path_parts, "styles?.htm", files );
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "script.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+                JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files( siteDir, jx_path_parts, "script?.htm", files );
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "javascript.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+                JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files( siteDir, jx_path_parts, "javascript?.htm", files );
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "head_end.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+			}
+
+			if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "body.htm" )) )
+			{
+				ArrayOfFile_append_file( files, &f );
+			}
+			else
+			{
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "body_start.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "main.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+                else
+                {
+                    if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "main_start.htm" )) )
+                    {
+                        ArrayOfFile_append_file( files, &f );
+                    }
+
+                    if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "aside.htm" )) )
+                    {
+                        ArrayOfFile_append_file( files, &f );
+                    }
+
+                    if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "article.htm" )) )
+                    {
+                        ArrayOfFile_append_file( files, &f );
+                    }
+
+                    if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "main_end.htm" )) )
+                    {
+                        ArrayOfFile_append_file( files, &f );
+                    }
+                }
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "footer.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "nav.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+                else
+                {
+                    if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "nav_start.htm" )) )
+                    {
+                        ArrayOfFile_append_file( files, &f );
+                    }
+
+                    JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files( siteDir, jx_path_parts, "nav?.htm", files );
+
+                    if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "nav_end.htm" )) )
+                    {
+                        ArrayOfFile_append_file( files, &f );
+                    }
+                }
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "breadcrumbs.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "header.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "menu.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+                else
+                {
+                    if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "menu_start.htm" )) )
+                    {
+                        ArrayOfFile_append_file( files, &f );
+                    }
+
+                    JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files( siteDir, jx_path_parts, "menu?.htm", files );
+
+                    if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "menu_end.htm" )) )
+                    {
+                        ArrayOfFile_append_file( files, &f );
+                    }
+                }
+
+                if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "dialogs.htm" )) )
+                {
+                    ArrayOfFile_append_file( files, &f );
+                }
+                JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files( siteDir, jx_path_parts, "dialogs?.htm", files );
+
+				if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "body_end.htm" )) )
+				{
+					ArrayOfFile_append_file( files, &f );
+				}
+			}
+
+			if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "html_end.htm" )) )
+			{
+				ArrayOfFile_append_file( files, &f );
+			}
 		}
 	}
-	Path_free( &path );
-	
-	return files;
+}
+
+File* JuxtaPage_FindFile_siteDir_jxPathParts_filename( const Path* siteDir, const Array* jxPathParts, const char* filename )
+{
+    File* f = null;
+
+    Path*   content_dir   = Path_child( siteDir, "_content" );
+    {
+        if ( 0 == Array_count( jxPathParts ) )
+        {
+            //                     |
+            //  www/test.juxtapage/_content/_index
+
+            Path* index_dir = Path_child( siteDir, "_content/_index" );
+            {
+                Path* trial_path = Path_child( index_dir, filename );
+
+                f = File_CreateIfExists_path( &trial_path );
+
+                if ( f )
+                {
+                    Path* trial_path = Path_child( index_dir, filename );
+                    fprintf( stderr, "Found: %20s --> %s\n", filename, Path_getAbsolute( trial_path ) );
+                    Path_free( &trial_path );
+                }
+            }
+            Path_free( &index_dir );
+        }
+
+        int number = Array_count( jxPathParts );
+
+        while ( (0 < number) && !f )
+        {
+            String* target_name = Array_joinStrings_separator_number( jxPathParts, '-', number-- );
+            {
+                Path* target_path = Path_child( content_dir, String_getChars( target_name ) );
+                {
+                    Path* trial_path = Path_child( target_path, filename );
+
+                    f = File_CreateIfExists_path( &trial_path );
+
+                    if ( f )
+                    {
+                        Path* trial_path = Path_child( target_path, filename );
+                        fprintf( stderr, "Found: %20s --> %s\n", filename, Path_getAbsolute( trial_path ) );
+                        Path_free( &trial_path );
+                    }
+                }
+                Path_free( &target_path );
+            }
+            String_free( &target_name );
+        }
+
+        if ( !f )
+        {
+            //                     |
+            //  www/test.juxtapage/_content/_site
+
+            Path* site_dir = Path_child( siteDir, "_content/_site" );
+            {
+                Path* trial_path = Path_child( site_dir, filename );
+
+                f = File_CreateIfExists_path( &trial_path );
+
+                if ( f )
+                {
+                    Path* trial_path = Path_child( site_dir, filename );
+                    fprintf( stderr, "Found: %20s --> %s\n", filename, Path_getAbsolute( trial_path ) );
+                    Path_free( &trial_path );
+                }
+            }
+            Path_free( &site_dir );
+        }
+    }
+    Path_free( &content_dir );
+
+    return f;
+}
+
+void
+JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files( const Path* siteDir,  const Array* jxPathParts, const char* pattern, ArrayOfFile* const files )
+{
+    File*   f        = null;
+    String* filename = String_new( pattern );
+    int     index    = String_indexOf_ch_skip( filename, '?', 0 );
+    char*  _filename = (char*) String_getChars( filename );
+
+    for ( int i=0; i < 9; i++ )
+    {
+        _filename[index] = (char) '0' + i;
+
+        if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jxPathParts, _filename )) )
+        {
+            ArrayOfFile_append_file( files, &f );
+        }
+    }
+    String_free( &filename );
 }
