@@ -1,20 +1,23 @@
+arch := $(shell uname)
+cpu  := $(shell uname -m)
 
-all: _dir _obj _bin
+all: dir obj bin
 
-_dir:
-	mkdir -p bin obj
+dir:
+	mkdir -p _bin/$(arch)-$(cpu) _obj/$(arch)-$(cpu)
 
-_obj:
-	gcc -g -o obj/libbase.o        -Isource/include -c source/src/libbase/libbase.c
-	gcc -g -o obj/libhttp.o        -Isource/include -c source/src/libhttp/libhttp.c
-	gcc -g -o obj/libhttpserver.o  -Isource/include -c source/src/libhttpserver/libhttpserver.c
-	gcc -g -o obj/main.o           -Isource/include -c source/src/main.c
+obj:
+	gcc -g -o _obj/$(arch)-$(cpu)/IO_sendFile.o    -Isource/include -c source/src/libbase/$(arch)/IO_sendFile.c
+	gcc -g -o _obj/$(arch)-$(cpu)/libbase.o        -Isource/include -c source/src/libbase/libbase.c
+	gcc -g -o _obj/$(arch)-$(cpu)/libhttp.o        -Isource/include -c source/src/libhttp/libhttp.c
+	gcc -g -o _obj/$(arch)-$(cpu)/libhttpserver.o  -Isource/include -c source/src/libhttpserver/libhttpserver.c
+	gcc -g -o _obj/$(arch)-$(cpu)/main.o           -Isource/include -c source/src/main.c
 
-_bin:
-	gcc -g -o bin/fastwebd obj/{libbase,libhttp,libhttpserver,main}.o
+bin:
+	gcc -g -o _bin/$(arch)-$(cpu)/fastwebd _obj/$(arch)-$(cpu)/{IO_sendFile,libbase,libhttp,libhttpserver,main}.o
 
 run:
-	cd share/www; ../../bin/fastwebd
+	cd share/www; ../../_bin/$(arch)-$(cpu)/fastwebd
 
 clean:
 	rm -rf bin obj
