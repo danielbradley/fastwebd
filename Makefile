@@ -20,4 +20,4 @@ run:
 	cd share/www; ../../_bin/$(arch)-$(cpu)/fastwebd
 
 clean:
-	rm -rf bin obj
+	rm -rf _bin _obj
