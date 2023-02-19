@@ -160,8 +160,10 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
         if ( !HTTPRequest_isValid( request ) )
         {
             const char* status = "HTTP/1.0 400 BAD_REQUEST \r\n";
+            const char* end    = "\r\n";
 
             IO_write( connection, status );
+            IO_write( connection, end    );
 
             fprintf( stdout, "Response: %s\n", status );
         }
@@ -169,8 +171,10 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
         if ( HTTPRequest_isIPTarget( request ) )
         {
             const char* status = "HTTP/1.0 202 Accepted \r\n";
+            const char* end    = "\r\n";
 
             IO_write( connection, status );
+            IO_write( connection, end    );
 
             fprintf( stdout, "Response: %s\n", status );
         }
