@@ -1,5 +1,6 @@
-arch := $(shell uname)
-cpu  := $(shell uname -m)
+arch    := $(shell uname)
+cpu     := $(shell uname -m)
+version := "1.2"
 
 all: dir obj bin
 
@@ -16,8 +17,12 @@ obj:
 bin:
 	gcc -g -o _bin/$(arch)-$(cpu)/fastwebd _obj/$(arch)-$(cpu)/*.o
 
+tar:
+	mkdir -p _tar
+	cd ..; tar --disable-copyfile --no-xattrs --exclude=".*" --exclude="_*" -jcvf fastwebd/_tar/fastwebd-$(version).tar.bz2 fastwebd
+
 run:
 	cd share/www; ../../_bin/$(arch)-$(cpu)/fastwebd
 
 clean:
-	rm -rf _bin _obj
+	rm -rf _bin _obj _tar
