@@ -136,9 +136,10 @@ HTTPServer_InvalidPort()
 void
 HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
 {
+    fprintf( stdout, "START\n" );
+
     HTTPRequest* request = HTTPRequest_Parse( connection );
 
-    MemInfo();
     if ( 1 )
     {
         const String* start_line = HTTPRequest_getStartLine( request );
@@ -161,6 +162,17 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
             const char* status = "HTTP/1.0 400 BAD_REQUEST \r\n";
 
             IO_write( connection, status );
+
+            fprintf( stdout, "Response: %s\n", status );
+        }
+        else
+        if ( HTTPRequest_isIPTarget( request ) )
+        {
+            const char* status = "HTTP/1.0 202 Accepted \r\n";
+
+            IO_write( connection, status );
+
+            fprintf( stdout, "Response: %s\n", status );
         }
         else
         if ( 1 )
@@ -178,6 +190,8 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
                 //fprintf( stdout, "Response: %s (%s)", status, String_getChars( File_getFilePath( file ) ) );
                 IO_write( connection, status );
                 IO_write( connection, end    );
+
+                fprintf( stdout, "Response: %s\n", status );
             }
             else
             if ( String_contentEquals( method, "OPTIONS" ) )
@@ -194,7 +208,7 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
                     StringBuffer_append_chars( headers, "Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, HEAD\r\n" );
                     StringBuffer_append_chars( headers, "Access-Control-Allow-Private-Network: true\r\n"                     );
                     StringBuffer_append_chars( headers, "Access-Control-Max-Age: 86400\r\n"                                  );
-        
+
                     IO_write( connection, status                           );
                     IO_write( connection, StringBuffer_getChars( headers ) );
                     IO_write( connection, end                              );
@@ -266,6 +280,8 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
         fprintf( stdout, "END\n" );
     }
     HTTPRequest_free( &request );
+
+    MemInfo();
 }
 
 static

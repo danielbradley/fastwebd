@@ -5,6 +5,7 @@ HTTPRequest*  HTTPRequest_new();
 HTTPRequest*  HTTPRequest_free        (       HTTPRequest** self );
 
       bool    HTTPRequest_isValid     ( const HTTPRequest*  self );
+      bool    HTTPRequest_isIPTarget  ( const HTTPRequest*  self );
 const String* HTTPRequest_getStartLine( const HTTPRequest*  self );
 const String* HTTPRequest_getMethod   ( const HTTPRequest*  self );
 const String* HTTPRequest_getResource ( const HTTPRequest*  self );

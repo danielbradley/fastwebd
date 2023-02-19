@@ -16,6 +16,7 @@ struct _HTTPHeader
 struct _HTTPRequest
 {
     bool    valid;
+    bool    ip_target;
     String* startLine;
     String* method;
     String* resource;
@@ -33,6 +34,7 @@ HTTPRequest_new()
     if ( self )
     {
         self->valid     = false;
+        self->ip_target = false;
         self->startLine = String_new( "" );
         self->method    = String_new( "" );
         self->resource  = String_new( "" );
@@ -67,6 +69,12 @@ bool
 HTTPRequest_isValid( const HTTPRequest* self )
 {
     return self->valid;
+}
+
+bool
+HTTPRequest_isIPTarget( const HTTPRequest*  self )
+{
+    return self->ip_target;
 }
 
 void
@@ -259,6 +267,18 @@ HTTPRequest_Parse( IO* connection )
                                     {
                                         HTTPRequest_setHost( request, String_getChars( host ) );
                                         HTTPRequest_setPort( request, String_getChars( port ) );
+                                        {
+                                            int     dot_index  = String_indexOf_ch_skip( host, '.', 0 );
+                                            String* first_quad = String_substring_index_length( host, 0, dot_index );
+
+                                            if ( String_isNumeric( first_quad ) )
+                                            {
+                                                int number = String_toNumber( first_quad );
+
+                                                if ( number < 255 ) request->ip_target = true;
+                                            }
+                                            String_free( &first_quad );
+                                        }
                                     }
                                     String_free( &host );
                                     String_free( &port );

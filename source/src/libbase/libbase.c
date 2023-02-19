@@ -437,7 +437,7 @@ Address_new_port( short port )
 
         inner->sin_family      = AF_INET;
         inner->sin_port        = htons( port );
-        inner->sin_addr.s_addr = htonl( INADDR_LOOPBACK );
+        inner->sin_addr.s_addr = htonl( INADDR_ANY );
     }
     return address;
 }
@@ -1085,6 +1085,20 @@ String_extension( const String* self, const char separator )
 }
 
 bool
+String_isNumeric( const String*  self )
+{
+    int n = String_getLength( self );
+
+    for ( int i=0; i < n; i++ )
+    {
+        char ch = self->data[i];
+
+        if ( (ch < '0') || ('9' < ch) ) return false;
+    }
+    return true;
+}
+
+bool
 String_startsWith( const String* self, const char* prefix )
 {
     return (0 == strncmp( self->data, prefix, strlen( prefix ) ));
@@ -1104,9 +1118,16 @@ String_substring_index_length( const String* self, int index, int length )
         for ( int i=length; i < substring->length; i++ )
         {
             substring->data[i] = '\0';
+            substring->length = length;
         }
     }
     return substring;
+}
+
+int
+String_toNumber( const String* self )
+{
+    return atoi( self->data );
 }
 
 int
