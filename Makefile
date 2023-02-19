@@ -14,7 +14,7 @@ obj:
 	gcc -g -o _obj/$(arch)-$(cpu)/main.o           -Isource/include -c source/src/main.c
 
 bin:
-	gcc -g -o _bin/$(arch)-$(cpu)/fastwebd _obj/$(arch)-$(cpu)/{IO_sendFile,libbase,libhttp,libhttpserver,main}.o
+	gcc -g -o _bin/$(arch)-$(cpu)/fastwebd _obj/$(arch)-$(cpu)/*.o
 
 run:
 	cd share/www; ../../_bin/$(arch)-$(cpu)/fastwebd
