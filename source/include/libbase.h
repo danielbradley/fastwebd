@@ -33,6 +33,9 @@ int    Exit       ( int    exit            );
 void** Give       ( void*  pointer         );
 void   Swap       ( void*  one, void* two  );
 void*  TakeElement( void** given           );
+void   MemInfo    (                        );
+
+typedef void*(*Free)(void**);
 
 #define Delete( self )      Del( (void**) self )
 #define DeleteArray( self ) DelArray( (void**) self )

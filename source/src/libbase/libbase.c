@@ -38,6 +38,7 @@ static int Arrays  = 0;
 
 struct _Array
 {
+    void*(*free)(void**);
     int    count;
     int    capacity;
     void** elements;
@@ -124,9 +125,14 @@ DelArray( void** self )
     return *self;
 }
 
+void MemInfo()
+{
+    printf( "Objects: %i, Arrays: %i\n", Objects, Arrays );
+}
+
 int Exit( int exit )
 {
-    if ( Objects + Arrays ) printf( "Objects: %i, Arrays: %i\n", Objects, Arrays );
+    if ( Objects + Arrays ) MemInfo();
 
     return exit;
 }
@@ -137,6 +143,21 @@ Array_new()
     Array* self = New( sizeof( Array ) );
     if ( self )
     {
+        self->free     = null;
+        self->count    = 0;
+        self->capacity = DEFAULT_CAPACITY;
+        self->elements = NewArray( sizeof( void* ), self->capacity );
+    }
+    return self;
+}
+
+Array*
+Array_new_free( void*(*free)(void**) )
+{
+    Array* self = New( sizeof( Array ) );
+    if ( self )
+    {
+        self->free     = free;
         self->count    = 0;
         self->capacity = DEFAULT_CAPACITY;
         self->elements = NewArray( sizeof( void* ), self->capacity );
@@ -149,8 +170,11 @@ Array_free( Array** self )
 {
     if ( *self )
     {
+        Array_empty( *self );
+
         (*self)->count    = 0;
-        (*self)->capacity = DEFAULT_CAPACITY;
+        (*self)->capacity = 0;
+
         DeleteArray( &(*self)->elements );
     }
     return Delete( self );
@@ -161,20 +185,39 @@ Array_free_destructor( Array** self, void* (*free)( void** ) )
 {
     if ( *self )
     {
-        Array* _self = *self;
+        (*self)->free = free;
 
-        for ( int i=0; i < _self->capacity; i++ )
-        {
-            if ( _self->elements[i] ) _self->elements[i] = free( &_self->elements[i] );
-        }
+        Array_free( self );
     }
-    return Array_free( self );
+    return 0;
 }
 
 int
 Array_count( const Array* self )
 {
     return self->count;
+}
+
+void
+Array_empty( Array* self )
+{
+    int n = self->capacity;
+
+    for ( int i=0; i < n; i++ )
+    {
+        if ( self->elements[i] )
+        {
+            if ( self->free )
+            {
+                self->free( &(self->elements[i]) );
+            }
+            else
+            {
+                self->elements[i] = 0;
+            }
+            self->count--;
+        }
+    }
 }
 
 int
@@ -1111,7 +1154,7 @@ String_trimEnd( String* self )
 Array*
 String_toArray_separator( const String* self, char separator )
 {
-    Array* parts = Array_new();
+    Array* parts = Array_new_free( (Free) String_free );
 
     int loop  = 1;
     int start = 0;
@@ -1140,6 +1183,10 @@ String_toArray_separator( const String* self, char separator )
             if ( String_getLength( part ) > 0 )
             {
                 Array_append_element( parts, (void**) &part );
+            }
+            else
+            {
+                String_free( &part );
             }
             loop = 0;
         }
