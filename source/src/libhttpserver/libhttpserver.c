@@ -105,16 +105,21 @@ HTTPServer_acceptConnections( HTTPServer* self )
 
     while ( KeepAlive && IO_accept( self->socket, peer, &connection ) )
     {
-        int factor = 1000;
+        pid_t pid = fork();
 
-        /*
-         *  Kludge to stop Safari from crashing.
-         */
-        usleep( 10 * factor );
+        if ( 0 == pid )
+        {
+            int factor = 1000;
 
-        HTTPServer_Process_srvDir_connection( srvDir, connection );
+            /*
+             *  Kludge to stop Safari from crashing.
+             */
+            usleep( 10 * factor );
+
+            HTTPServer_Process_srvDir_connection( srvDir, connection );
+            KeepAlive = false;
+        }
         IO_free( &connection );
-
     }
 
     Path_free( &srvDir );
