@@ -2,6 +2,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <strings.h>
+#include <sys/wait.h>
 
 #include "libbase.h"
 #include "libhttp.h"
@@ -105,6 +106,9 @@ HTTPServer_acceptConnections( HTTPServer* self )
 
     while ( KeepAlive && IO_accept( self->socket, peer, &connection ) )
     {
+        fflush( stdout );
+        fflush( stderr );
+
         pid_t pid = fork();
 
         if ( 0 == pid )
@@ -118,6 +122,14 @@ HTTPServer_acceptConnections( HTTPServer* self )
 
             HTTPServer_Process_srvDir_connection( srvDir, connection );
             KeepAlive = false;
+        }
+        else
+        {
+            pid_t any_children = -1;                    // Wait for any child process.
+            int*  stat_loc     = NULL;                  // Don't care about result.
+            int   dont_block   = WNOHANG | WUNTRACED;   // Do not block if no processes.
+
+            while ( 0 < waitpid( any_children, stat_loc, dont_block ) );
         }
         IO_free( &connection );
     }
