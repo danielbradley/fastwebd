@@ -1,6 +1,6 @@
 arch    := $(shell uname)
 cpu     := $(shell uname -m)
-version := "1.3"
+version := "1.4"
 
 all: dir obj bin
 
