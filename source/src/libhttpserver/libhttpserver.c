@@ -282,6 +282,7 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
             ArrayOfFile_free( &files );
         }
         fprintf( stdout, "END\n" );
+        fflush( stdout );
     }
     HTTPRequest_free( &request );
 
