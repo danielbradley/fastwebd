@@ -24,6 +24,7 @@ struct _HTTPRequest
     String* host;
     String* port;
     String* origin;
+    String* forwardedFor;
     Array*  headers;
 };
 
@@ -33,16 +34,17 @@ HTTPRequest_new()
     HTTPRequest* self = New( sizeof( HTTPRequest ) );
     if ( self )
     {
-        self->valid     = false;
-        self->ip_target = false;
-        self->startLine = String_new( "" );
-        self->method    = String_new( "" );
-        self->resource  = String_new( "" );
-        self->version   = String_new( "" );
-        self->host      = String_new( "" );
-        self->port      = String_new( "" );
-        self->origin    = String_new( "" );
-        self->headers   = Array_new();
+        self->valid        = false;
+        self->ip_target    = false;
+        self->startLine    = String_new( "" );
+        self->method       = String_new( "" );
+        self->resource     = String_new( "" );
+        self->version      = String_new( "" );
+        self->host         = String_new( "" );
+        self->port         = String_new( "" );
+        self->origin       = String_new( "" );
+        self->forwardedFor = String_new( "" );
+        self->headers      = Array_new();
     }
     return self;
 }
@@ -52,13 +54,14 @@ HTTPRequest_free( HTTPRequest** self )
 {
     if ( *self )
     {
-        String_free( &(*self)->startLine );
-        String_free( &(*self)->method    );
-        String_free( &(*self)->resource  );
-        String_free( &(*self)->version   );
-        String_free( &(*self)->host      );
-        String_free( &(*self)->port      );
-        String_free( &(*self)->origin    );
+        String_free( &(*self)->startLine    );
+        String_free( &(*self)->method       );
+        String_free( &(*self)->resource     );
+        String_free( &(*self)->version      );
+        String_free( &(*self)->host         );
+        String_free( &(*self)->port         );
+        String_free( &(*self)->origin       );
+        String_free( &(*self)->forwardedFor );
         Array_free_destructor( &(*self)->headers, (void* (*)( void** )) HTTPHeader_free );
     }
 
@@ -147,6 +150,16 @@ HTTPRequest_setOrigin  ( HTTPRequest* self, const char* origin )
     String_trimEnd( self->origin );
 }
 
+void
+HTTPRequest_setForwardedFor( HTTPRequest* self, const char* forwardedFor )
+{
+    String_free( &self->forwardedFor );
+
+    self->forwardedFor = String_new( forwardedFor );
+
+    String_trimEnd( self->forwardedFor );
+}
+
 const String*
 HTTPRequest_getStartLine( const HTTPRequest* self )
 {
@@ -189,6 +202,44 @@ HTTPRequest_getOrigin  ( const HTTPRequest*  self )
     return self->origin;
 }
 
+const String*
+HTTPRequest_getForwardedFor( const HTTPRequest*  self )
+{
+    return self->forwardedFor;
+}
+
+void
+HTTPRequest_log_status( const HTTPRequest* self, const char* status, int statusNum )
+{
+    //
+    //  [xff 192.168.1.1:12345] [client 192.168.1.162:53758] Duration: ms. GET host:/url/ status
+    //61
+
+    char   origin[1024];
+    char      xff[1024];
+    char   method[1024];
+    char     host[1024];
+    char resource[1024];
+    char  logline[6144];
+
+    snprintf(   origin, 1023, "[origin %s]", String_getChars( HTTPRequest_getOrigin      ( self ) ) );
+    snprintf(      xff, 1023, "[xff %s]",    String_getChars( HTTPRequest_getForwardedFor( self ) ) );
+    snprintf(   method, 1023, "%5s",         String_getChars( HTTPRequest_getMethod      ( self ) ) );
+    snprintf(     host, 1023, "%s",          String_getChars( HTTPRequest_getHost        ( self ) ) );
+    snprintf( resource, 1023, "%s",          String_getChars( HTTPRequest_getResource    ( self ) ) );
+
+    if ( 0 < String_getLength( HTTPRequest_getForwardedFor( self ) ) )
+    {
+        snprintf( logline, 6143, "[%3i] %s   %s %s %s%s", statusNum, origin, xff, method, host, resource );
+    }
+    else
+    {
+        snprintf( logline, 6143, "[%3i] %-24s %s %s%s", statusNum, origin, method, host, resource );
+    }
+
+    SysLog_Log_chars( logline );
+}
+
 void
 HTTPRequest_validate( HTTPRequest* self )
 {
@@ -213,12 +264,11 @@ HTTPRequest_validate( HTTPRequest* self )
 }
 
 HTTPRequest*
-HTTPRequest_Parse( IO* connection )
+HTTPRequest_Parse( const Address* peer, IO* connection, const String* localDomain )
 {
     HTTPRequest* request = HTTPRequest_new();
     if ( 1 )
     {
-
         String* line = HTTPRequest_ReadLine( connection );
 
         if ( line )
@@ -227,6 +277,7 @@ HTTPRequest_Parse( IO* connection )
             int end_resource = String_indexOf_ch_skip( line, ' ', 1 );
             int len          = end_resource - (end_method + 1);
 
+            String* origin   = Address_origin               ( peer                               );
             String* method   = String_substring_index_length( line,                0, end_method );
             String* resource = String_substring_index_length( line, end_method   + 1, len        );
             String* version  = String_substring_index       ( line, end_resource + 1             );
@@ -235,7 +286,9 @@ HTTPRequest_Parse( IO* connection )
                 HTTPRequest_setMethod   ( request, String_getChars( method   ) );
                 HTTPRequest_setResource ( request, String_getChars( resource ) );
                 HTTPRequest_setVersion  ( request, String_getChars( version  ) );
+                HTTPRequest_setOrigin   ( request, String_getChars( origin   ) );
             }
+            String_free( &origin   );
             String_free( &method   );
             String_free( &resource );
             String_free( &version  );
@@ -276,6 +329,12 @@ HTTPRequest_Parse( IO* connection )
                                                 int number = String_toNumber( first_quad );
 
                                                 if ( number < 255 ) request->ip_target = true;
+
+                                                if ( localDomain )
+                                                {
+                                                    HTTPRequest_setHost( request, String_getChars( localDomain ) );
+                                                    request->ip_target = false;
+                                                }
                                             }
                                             String_free( &first_quad );
                                         }
@@ -295,6 +354,14 @@ HTTPRequest_Parse( IO* connection )
 
                                 HTTPRequest_setOrigin( request, String_getChars( value ) );
                             }
+                            else
+                            if ( String_contentEquals( header->name, "X-Forwarded-For" ) )
+                            {
+                                const String* value = HTTPHeader_getValue( header );
+
+                                HTTPRequest_setForwardedFor( request, String_getChars( value ) );
+                            }
+
                             //printf( stdout, "[%s][%s]\n", String_getChars( header->name ), String_getChars( header->value ) );
 
                             Array_append_element( request->headers, (void**) &header );
