@@ -13,31 +13,23 @@
 #define null 0
 #endif
 
+typedef void*(*Destructor)(void*);
+
 #include "libbase/types.h"
 #include "libbase/Address.h"
+#include "libbase/Arguments.h"
 #include "libbase/Array.h"
 #include "libbase/ArrayOfFile.h"
 #include "libbase/CharString.h"
 #include "libbase/File.h"
 #include "libbase/IO.h"
+#include "libbase/KeyValue.h"
+#include "libbase/Object.h"
 #include "libbase/Path.h"
+#include "libbase/Platform.h"
 #include "libbase/Security.h"
 #include "libbase/String.h"
 #include "libbase/StringBuffer.h"
+#include "libbase/SysLog.h"
 
-void*  New        ( int    size            );
-void*  NewArray   ( int    size, int count );
-void*  Del        ( void** ptrptr          );
-void*  DelArray   ( void** ptrptr          );
-int    Exit       ( int    exit            );
-void** Give       ( void*  pointer         );
-void   Swap       ( void*  one, void* two  );
-void*  TakeElement( void** given           );
-void   MemInfo    (                        );
-
-typedef void*(*Free)(void**);
-
-#define Delete( self )      Del( (void**) self )
-#define DeleteArray( self ) DelArray( (void**) self )
-#define Take( self )        TakeElement( (void**) self )
 #endif

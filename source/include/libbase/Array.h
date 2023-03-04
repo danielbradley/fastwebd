@@ -3,6 +3,7 @@
 
      Array* Array_new                         (                                                  );
      Array* Array_new_free                    (        void*(*free)(void**)                      );
+     Array* Array_destruct                    (       Array*  self                               );
      Array* Array_free                        (       Array** self                               );
      Array* Array_free_destructor             (       Array** self, void* (*free)( void** )      );
       int   Array_count                       ( const Array*  self                               );

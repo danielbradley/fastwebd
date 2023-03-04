@@ -5,10 +5,13 @@ typedef int                   FD;
 typedef int                   bool;
 
 typedef struct _Address       Address;
+typedef struct _Arguments     Arguments;
 typedef struct _Array         Array;
 typedef struct _ArrayOfFile   ArrayOfFile;
 typedef struct _File          File;
 typedef struct _IO            IO;
+typedef struct _KeyValue      KeyValue;
+typedef struct _Object        Object;
 typedef struct _Path          Path;
 typedef struct _Socket        Socket;
 typedef struct _String        String;

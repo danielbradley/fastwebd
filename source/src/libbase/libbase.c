@@ -1,5 +1,6 @@
 #include "libbase.h"
 
+#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
@@ -10,24 +11,23 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <grp.h>
+#include <signal.h>
 
 #define NOT_FOUND -1
 
-#define MIME_UNKNOWN        "application/binary"
-#define MIME_APP_JS         "application/javascript"
-#define MIME_IMAGE_GIF      "image/gif"
-#define MIME_IMAGE_JPG      "image/jpeg"
-#define MIME_IMAGE_PNG      "image/png"
-#define MIME_TEXT_CSS       "text/css"
-#define MIME_TEXT_PLAIN     "text/plain"
-#define MIME_TEXT_HTML      "text/html"
-#define MIME_TEXT_HTML_UTF8 "text/html;charset=UTF-8"
-#define DEFAULT_CAPACITY    255
-#define NOT_FOUND          -1
+#define DEFAULT_CAPACITY      255
+#define NOT_FOUND            -1
 
-static const char*   File_DetermineMimeType( const String* extension );
+typedef enum _ObjectType
+{
+    ARRAY  = 0xCAFEBABE,
+    OBJECT = 0xBABECAFE
+
+} ObjectType;
+
 static       String* FGetLine( FILE* stream, size_t* len );
 
 //static
@@ -35,6 +35,18 @@ static       String* FGetLine( FILE* stream, size_t* len );
 
 static int Objects = 0;
 static int Arrays  = 0;
+
+struct _Object
+{
+    ObjectType type;
+    void*(*destruct)(void*);
+};
+
+struct _Arguments
+{
+    Object super;
+    Array* keyValues;
+};
 
 struct _Array
 {
@@ -71,6 +83,13 @@ struct _IO
     FILE* stream;
 };
 
+struct _KeyValue
+{
+    Object  super;
+    String* key;
+    String* value;
+};
+
 struct _Path
 {
     String* absolute;
@@ -89,40 +108,102 @@ struct _StringBuffer
     char* data;
 };
 
+/*
 void*
-New( int size )
+New( int size ) // Same as Platform_Alloc
 {
-    Objects++;
-    return calloc( 1, size );
+    return NewArray( size, 0 );
 }
 
 void*
-NewArray( int size, int count )
+NewArray( int size, int count ) // Same as Platform_Alloc
 {
-    Arrays++;
-    return calloc( count, size );
-}
-
-void*
-Del( void** self )
-{
-    if ( *self )
+    if ( 0 == count )
     {
-        free( *self ); *self = 0;
+        Objects++;
+        return calloc( 1, size );
+    }
+    else
+    {
+        Arrays++;
+        return calloc( count, size );
+    }
+}
+*/
+
+/*
+void*
+Del( void** element )
+{
+    if ( element && *element )
+    {
+        Object* obj = *element;
+
+        if ( OBJECT == obj->type )
+        {
+            obj->destruct( *element );
+        }
+        free( *element ); *element = 0;
         Objects--;
     }
-    return *self;
+    return null;
 }
 
 void*
-DelArray( void** self )
+DelArray( void** array )
 {
-    if ( *self )
+    if ( array && *array )
     {
-        free( *self ); *self = 0;
+        free( *array ); *array = 0;
         Arrays--;
     }
-    return *self;
+    return *array;
+}
+*/
+
+void* Platform_New( int size, int count )
+{
+    if ( 0 == count )
+    {
+        Objects++;
+        return calloc( 1, size );
+    }
+    else
+    {
+        Arrays++;
+        return calloc( count, size );
+    }
+}
+
+void*
+Platform_Delete( void** element )
+{
+    if ( element && *element )
+    {
+        Object* obj = *element;
+
+        switch ( obj->type )
+        {
+        case ARRAY:
+        case OBJECT:
+            obj->destruct( *element );
+            break;
+        }
+        free( *element ); *element = 0;
+        Objects--;
+    }
+    return null;
+}
+
+void*
+Platform_DeleteArray( void** array )
+{
+    if ( array && *array )
+    {
+        free( *array ); *array = 0;
+        Arrays--;
+    }
+    return *array;
 }
 
 void MemInfo()
@@ -135,6 +216,59 @@ int Exit( int exit )
     if ( Objects + Arrays ) MemInfo();
 
     return exit;
+}
+
+Arguments*
+Arguments_new_count_arguments( int count, char** arguments )
+{
+    Arguments* self = New( sizeof( Arguments ) );
+    if ( self )
+    {
+        Object_init( &self->super, (Destructor) Arguments_destruct );
+        self->keyValues = Array_new_free( (Free) KeyValue_free );
+
+        for ( int i=1; i < count; i++ )
+        {
+            KeyValue* key_value = KeyValue_new( arguments[i-1], arguments[i] );
+
+            Array_append_element( self->keyValues, (void**) &key_value );
+        }
+    }
+    return self;
+}
+
+Arguments*
+Arguments_destruct( Arguments* self )
+{
+    if ( self )
+    {
+        Array_free     ( &self->keyValues );
+        Object_destruct( &self->super     );
+    }
+    return self;
+}
+
+Arguments*
+Arguments_free( Arguments** self )
+{
+    if ( self && *self )
+    {
+        Arguments_destruct( *self );
+        Delete( self );
+    }
+    return null;
+}
+
+String*
+Arguments_getIntFor_flag( const Arguments* self, const char* flag )
+{
+    return null;
+}
+
+String*
+Arguments_getStringFor_flag( const Arguments* self, const char* flag )
+{
+    return null;
 }
 
 Array*
@@ -166,18 +300,28 @@ Array_new_free( void*(*free)(void**) )
 }
 
 Array*
+Array_destruct( Array* self )
+{
+    Array_empty( self );
+
+    self->count    = 0;
+    self->capacity = 0;
+
+    DeleteArray( &self->elements );
+
+    return self;
+}
+
+Array*
 Array_free( Array** self )
 {
-    if ( *self )
+    if ( self && *self )
     {
-        Array_empty( *self );
+        Array_destruct( *self );
 
-        (*self)->count    = 0;
-        (*self)->capacity = 0;
-
-        DeleteArray( &(*self)->elements );
+        Delete( self );
     }
-    return Delete( self );
+    return null;
 }
 
 Array*
@@ -360,7 +504,7 @@ Array_joinStrings_separator_number( const Array* self, char separator, int numbe
                 {
                     StringBuffer_append_string( buffer, (String*) Array_get_index( self, i ) );
 
-                    if ( i < (count-1) )
+                    if ( number )
                     {
                         StringBuffer_append_chars( buffer, sep );
                     }
@@ -446,6 +590,19 @@ Address*
 Address_free( Address** self )
 {
     return Delete( self );
+}
+
+String*
+Address_origin( const Address* self )
+{
+    struct sockaddr_in* inner = (struct sockaddr_in*) &self->inner;
+
+    char str[INET_ADDRSTRLEN];
+
+    // now get it back and print it
+    inet_ntop(AF_INET, &(inner->sin_addr), str, INET_ADDRSTRLEN);
+
+    return String_new( str );
 }
 
 char*
@@ -576,7 +733,7 @@ File* File_open( File* self )
     else
     {
         int fd         = open( fpath, O_RDONLY );
-        self->io       = IO_open_mode( IO_new( &fd ), "r" );
+        self->io       = IO_open_mode( IO_new( &fd ), "rb" );
         self->byteSize = buf.st_size;
     }
 
@@ -588,6 +745,22 @@ File* File_close( File* self )
     IO_free( &self->io );
 
     return self;
+}
+
+bool
+File_isMimeType( const File* self, const char* mimeType )
+{
+    bool is_mime_type = false;
+
+    String* mime = String_new( File_getMimeType( self ) );
+
+    if ( String_startsWith( mime, mimeType ) )
+    {
+        is_mime_type = true;
+    }
+    String_free( &mime );
+
+    return is_mime_type;
 }
 
 File* File_CreateIfExists_path( Path** path )
@@ -603,61 +776,163 @@ File* File_CreateIfExists_path( Path** path )
     return file;
 }
 
-static const char* File_DetermineMimeType( const String* extension )
+const char* File_DetermineMimeType( const String* extension )
 {
-    if ( String_endsWith( extension, ".gif" ) )
+    const char* _extension = String_getChars( extension );
+
+    //
+    //   From:
+    //   https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
+    //
+
+    if ( '.' == _extension[0] )
     {
-        return MIME_IMAGE_GIF;
+        switch( _extension[1] )
+        {
+        case 'a':
+            if ( String_endsWith( extension, ".aac"  ) ) return       "audio/aac";
+            if ( String_endsWith( extension, ".abw"  ) ) return "application/x-abiword";
+            if ( String_endsWith( extension, ".arc"  ) ) return "application/x-freearc";
+            if ( String_endsWith( extension, ".avif" ) ) return       "image/avif";
+            if ( String_endsWith( extension, ".avi"  ) ) return       "video/x-msvideo";
+            if ( String_endsWith( extension, ".azw"  ) ) return "application/vnd.amazon.ebook";
+            break;
+
+        case 'b':
+            if ( String_endsWith( extension, ".bin"  ) ) return "application/octet-stream";
+            if ( String_endsWith( extension, ".bmp"  ) ) return       "image/bmp";
+            if ( String_endsWith( extension, ".bz"   ) ) return "application/x-bzip";
+            if ( String_endsWith( extension, ".bz2"  ) ) return "application/x-bzip2";
+            break;
+
+        case 'c':
+            if ( String_endsWith( extension, ".cda"  ) ) return "application/x-cdf";
+            if ( String_endsWith( extension, ".csh"  ) ) return "application/x-csh";
+            if ( String_endsWith( extension, ".css"  ) ) return        "text/css";
+            if ( String_endsWith( extension, ".csv"  ) ) return        "text/csv";
+            break;
+
+        case 'd':
+            if ( String_endsWith( extension, ".doc"  ) ) return "application/msword";
+            if ( String_endsWith( extension, ".docx" ) ) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            break;
+
+        case 'e':
+            if ( String_endsWith( extension, ".eot"  ) ) return "application/vnd.ms-fontobject";
+            if ( String_endsWith( extension, ".epub" ) ) return "application/epub+zip";
+            break;
+
+        case 'g':
+            if ( String_endsWith( extension, ".gz"   ) ) return "application/gzip";
+            if ( String_endsWith( extension, ".gif"  ) ) return "image/gif";
+            break;
+
+        case 'h':
+            if ( String_endsWith( extension, ".htm"  ) ) return "text/html";
+            if ( String_endsWith( extension, ".html" ) ) return "text/html";
+            break;
+
+        case 'i':
+            if ( String_endsWith( extension, ".ico"  ) ) return "image/vnd.microsoft.icon";
+            if ( String_endsWith( extension, ".ics"  ) ) return "text/calendar";
+            break;
+
+        case 'j':
+            if ( String_endsWith( extension, ".jar"    ) ) return "application/java-archive";
+            if ( String_endsWith( extension, ".jpeg"   ) ) return "image/jpeg";
+            if ( String_endsWith( extension, ".jpg"    ) ) return "image/jpeg";
+            if ( String_endsWith( extension, ".js"     ) ) return "text/javascript";
+            if ( String_endsWith( extension, ".json"   ) ) return "application/json";
+            if ( String_endsWith( extension, ".jsonld" ) ) return "application/ld+json";
+            break;
+
+        case 'm':
+            if ( String_endsWith( extension, ".mid"    ) ) return "audo/x-midi";
+            if ( String_endsWith( extension, ".midi"   ) ) return "audo/x-midi";
+            if ( String_endsWith( extension, ".mjs"    ) ) return "text/javascript";
+            if ( String_endsWith( extension, ".mp3"    ) ) return "audio/mpeg";
+            if ( String_endsWith( extension, ".mp4"    ) ) return "video/mp4";
+            if ( String_endsWith( extension, ".mpeg"   ) ) return "video/mpeg";
+            if ( String_endsWith( extension, ".mpkg"   ) ) return "application/vnd.apple.installer+xml";
+            break;
+
+        case 'o':
+            if ( String_endsWith( extension, ".odp"    ) ) return "application/vnd.oasis.opendocument.presentation";
+            if ( String_endsWith( extension, ".ods"    ) ) return "application/vnd.oasis.opendocument.spreadsheet";
+            if ( String_endsWith( extension, ".odt"    ) ) return "application/vnd.oasis.opendocument.text";
+            if ( String_endsWith( extension, ".oga"    ) ) return "audio/ogg";
+            if ( String_endsWith( extension, ".ogv"    ) ) return "video/ogg";
+            if ( String_endsWith( extension, ".ogx"    ) ) return "application/ogg";
+            if ( String_endsWith( extension, ".opus"   ) ) return "audio/opus";
+            if ( String_endsWith( extension, ".otf"    ) ) return "font/otf";
+            break;
+
+        case 'p':
+            if ( String_endsWith( extension, ".png"    ) ) return "image/png";
+            if ( String_endsWith( extension, ".pdf"    ) ) return "application/pdf";
+            if ( String_endsWith( extension, ".php"    ) ) return "application/x-httpd-php";
+            if ( String_endsWith( extension, ".ppt"    ) ) return "application/vnd.ms-powerpoint";
+            if ( String_endsWith( extension, ".pptx"   ) ) return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            break;
+
+        case 'r':
+            if ( String_endsWith( extension, ".rar"    ) ) return "application/vnd.rar";
+            if ( String_endsWith( extension, ".rft"    ) ) return "application/rtf";
+            break;
+
+        case 's':
+            if ( String_endsWith( extension, ".sh"     ) ) return "application/x-sh";
+            if ( String_endsWith( extension, ".svg"    ) ) return "image/svg+xml";
+            break;
+
+        case 't':
+            if ( String_endsWith( extension, ".tar"    ) ) return "application/x-tar";
+            if ( String_endsWith( extension, ".tif"    ) ) return "image/tiff";
+            if ( String_endsWith( extension, ".tiff"   ) ) return "image/tiff";
+            if ( String_endsWith( extension, ".ts"     ) ) return "video/mp2t";
+            if ( String_endsWith( extension, ".ttf"    ) ) return "font/ttf";
+            if ( String_endsWith( extension, ".txt"    ) ) return "text/plain";
+            break;
+
+        case 'v':
+            if ( String_endsWith( extension, ".vsd"    ) ) return "application/vnd.visio";
+            break;
+
+        case 'w':
+            if ( String_endsWith( extension, ".wav"    ) ) return "audio/wav";
+            if ( String_endsWith( extension, ".weba"   ) ) return "audio/webm";
+            if ( String_endsWith( extension, ".webm"   ) ) return "audio/webm";
+            if ( String_endsWith( extension, ".webp"   ) ) return "image/webp";
+            if ( String_endsWith( extension, ".woff"   ) ) return "font/woff";
+            if ( String_endsWith( extension, ".woff2"  ) ) return "font/woff2";
+            break;
+
+        case 'x':
+            if ( String_endsWith( extension, ".xhtml"  ) ) return "application/xhtml+xml";
+            if ( String_endsWith( extension, ".xls"    ) ) return "application/vnd.ms-excel";
+            if ( String_endsWith( extension, ".xlsx"   ) ) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            if ( String_endsWith( extension, ".xml"    ) ) return "application/xml";
+            if ( String_endsWith( extension, ".xul"    ) ) return "application/vnd.mozilla.xul+xml";
+            break;
+
+        case 'z':
+            if ( String_endsWith( extension, ".zip"    ) ) return "application/zip";
+            break;
+
+        case '3':
+            if ( String_endsWith( extension, ".3gp"    ) ) return "video/3gpp";
+            if ( String_endsWith( extension, ".3g2"    ) ) return "video/3gpp2";
+            break;
+
+        case '7':
+            if ( String_endsWith( extension, ".7z"     ) ) return "application/x-7z-compressed";
+            break;
+
+        default:
+            break;
+        }
     }
-    else
-    if ( String_endsWith( extension, ".png" ) )
-    {
-        return MIME_IMAGE_PNG;
-    }
-    else
-    if ( String_endsWith( extension, ".jpg" ) )
-    {
-        return MIME_IMAGE_JPG;
-    }
-    else
-    if ( String_endsWith( extension, ".jpeg" ) )
-    {
-        return MIME_IMAGE_JPG;
-    }
-    else
-    if ( String_endsWith( extension, ".txt" ) )
-    {
-        return MIME_TEXT_PLAIN;
-    }
-    else
-    if ( String_endsWith( extension, ".htm" ) )
-    {
-        return MIME_TEXT_HTML;
-    }
-    else
-    if ( String_endsWith( extension, ".html" ) )
-    {
-        return MIME_TEXT_HTML;
-    }
-    else
-    if ( String_endsWith( extension, ".css" ) )
-    {
-        return MIME_TEXT_CSS;
-    }
-    else
-    if ( String_endsWith( extension, ".js" ) )
-    {
-        return MIME_APP_JS;
-    }
-    else
-    if ( String_endsWith( extension, ".mjs" ) )
-    {
-        return MIME_APP_JS;
-    }
-    else
-    {
-        return MIME_UNKNOWN;
-    }
+    return "plain/text";
 }
 
 static void* stash[100];
@@ -727,7 +1002,7 @@ IO_accept( IO* self, Address* peer, IO** connection )
         switch ( errno )
         {
         case EBADF:
-            // Ignore as expected if CTRL + C is received.
+            //  Ignore as FD is invalidated when CTRL + C is pressed.
             break;
 
         default:
@@ -741,6 +1016,13 @@ IO_accept( IO* self, Address* peer, IO** connection )
 
         return true;
     }
+}
+
+void
+IO_flushAll()
+{
+    fflush( stdout );
+    fflush( stderr );
 }
 
 IO* IO_open_mode( IO* self, const char* mode )
@@ -787,6 +1069,55 @@ IO_Socket()
     return IO_new( &fd );
 }
 
+KeyValue*
+KeyValue_new( const char* key, const char* value )
+{
+    KeyValue* self = New( sizeof( KeyValue ) );
+    if ( self )
+    {
+        Object_init( &self->super, (Destructor) KeyValue_destruct );
+
+        self->key   = String_new( key );
+        self->value = String_new( value );
+    }
+    return self;
+}
+
+KeyValue*
+KeyValue_destruct( KeyValue* self )
+{
+    if ( self )
+    {
+        String_free( &self->key   );
+        String_free( &self->value );
+    }
+    return self;
+}
+
+KeyValue*
+KeyValue_free( KeyValue** self )
+{
+    if ( self && *self )
+    {
+        KeyValue_destruct( *self );
+
+        Delete( self );
+    }
+    return null;
+}
+
+String*
+KeyValue_getKey( const KeyValue* self )
+{
+    return self->key;
+}
+
+String*
+KeyValue_getValue( const KeyValue*  self )
+{
+    return self->value;
+}
+
 String*
 IO_readline( IO* self )
 {
@@ -802,6 +1133,20 @@ IO_PrintError( FILE* out )
 static bool IsWhitespace( char ch )
 {
     return (ch <= 32) || (127 <= ch);
+}
+
+void
+Object_init( Object* self, Destructor destruct )
+{
+    self->type     = OBJECT;
+    self->destruct = destruct;
+}
+
+void
+Object_destruct( Object* self )
+{
+    self->type     = null;
+    self->destruct = null;
 }
 
 Path* Path_new( const char* absolute )
@@ -858,6 +1203,46 @@ Path* Path_CurrentDirectory()
     free( cwd );
 
     return path;
+}
+
+int
+Platform_Fork()
+{
+    IO_flushAll();
+
+    return fork();
+}
+
+void
+Platform_MicroSleep( int microseconds )
+{
+    usleep( microseconds );
+}
+
+void
+Platform_MilliSleep( int milliseconds )
+{
+    int microseconds = milliseconds * 1000;
+
+    Platform_MicroSleep( microseconds );
+}
+
+void
+Platform_SecondSleep( int seconds )
+{
+    int milliseconds = seconds * 1000;
+
+    Platform_MilliSleep( milliseconds );
+}
+
+void
+Platform_Wait()
+{
+    pid_t any_children = -1;                    // Wait for any child process.
+    int*  stat_loc     = NULL;                  // Don't care about result.
+    int   dont_block   = WNOHANG | WUNTRACED;   // Do not block if no processes.
+
+    while ( 0 < waitpid( any_children, stat_loc, dont_block ) );
 }
 
 void
