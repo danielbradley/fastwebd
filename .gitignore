@@ -1,3 +1,5 @@
 .DS_Store
 _bin
 _obj
+_tar
+share/www
