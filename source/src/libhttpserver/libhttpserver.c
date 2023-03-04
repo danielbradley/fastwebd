@@ -8,12 +8,13 @@
 #include "libhttp.h"
 #include "libhttpserver.h"
 
-static void         HTTPServer_Process_srvDir_connection                 ( const Path*  srvDir,        IO*          connection                                                 );
-static ArrayOfFile* HTTPServer_DetermineFiles__srvDir_request            ( const Path*  srvDir,  const HTTPRequest* request                                                    );
-static void         HTTPServer_DiscoverFilesFrom_siteDir_resources_files ( const Path*  siteDir, const String*      resource,                         ArrayOfFile* const files );
-File*               JuxtaPage_FindFile_siteDir_jxPathParts_filename      ( const Path* siteDir,  const Array*       jxPathParts, const char* filename                          );
-void                JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files( const Path* siteDir,  const Array*       jxPathParts, const char* pattern, ArrayOfFile* const files );
+static bool Debug = false;
 
+static void         HTTPServer_Process_srvDir_peer_connection_defaultDomain( const Path*  srvDir,  const Address*     peer,              IO*   connection, const String* defaultDomain );
+static ArrayOfFile* HTTPServer_DetermineFiles__srvDir_request              ( const Path*  srvDir,  const HTTPRequest* request                                                          );
+static void         HTTPServer_DiscoverFilesFrom_siteDir_resources_files   ( const Path*  siteDir, const String*      resource,                            ArrayOfFile* const files    );
+File*               JuxtaPage_FindFile_siteDir_jxPathParts_filename        ( const Path* siteDir,  const Array*       jxPathParts, const char* filename                                );
+void                JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files  ( const Path* siteDir,  const Array*       jxPathParts, const char* pattern,    ArrayOfFile* const files    );
 
 static IO*     ServerSocket;
 static bool    KeepAlive = true;
@@ -29,14 +30,11 @@ void signalHandler( int signal )
     KeepAlive = false;
 
     IO_close( ServerSocket );
-
-    printf( "Signal: %i\n", signal );
-    //fprintf( stdout, " \b\b\b" );
 }
 
 void ignoreSigpipe( int signal )
 {
-    printf( "Signal: %i - ignoring SIGPIPE\n", signal );
+    if ( Debug ) printf( "Signal: %i - ignoring SIGPIPE\n", signal );
 }
 
 struct _HTTPServer
@@ -44,6 +42,7 @@ struct _HTTPServer
     short    port;
     Address* loopback;
     IO*      socket;
+    String*  defaultDomain;
 };
 
 HTTPServer*
@@ -51,9 +50,10 @@ HTTPServer_new_port( short port )
 {
     HTTPServer* self = New( sizeof( HTTPServer ) );
     {
-        self->port     = port;
-        self->loopback = Address_new_port( port );
-        self->socket   = IO_Socket();
+        self->port          = port;
+        self->loopback      = Address_new_port( port );
+        self->socket        = IO_Socket();
+        self->defaultDomain = null;
     }
 
     signal1  = signal(  1, signalHandler );
@@ -71,8 +71,9 @@ HTTPServer_free( HTTPServer** self )
     if ( *self )
     {
         (*self)->port = 0;
-        Address_free( &(*self)->loopback );
-        IO_free     ( &(*self)->socket   );
+        Address_free( &(*self)->loopback      );
+        IO_free     ( &(*self)->socket        );
+        String_free ( &(*self)->defaultDomain );
     }
     return Delete( self );
 }
@@ -84,7 +85,7 @@ HTTPServer_listen( HTTPServer* self )
 
     if ( IO_bind( self->socket, self->loopback ) )
     {
-        printf( "Bound socket to loopback\n" );
+        printf( "Bound socket to any\n" );
 
         Security_DropPrivilegesOrAbort();
 
@@ -100,62 +101,78 @@ HTTPServer_listen( HTTPServer* self )
 void
 HTTPServer_acceptConnections( HTTPServer* self )
 {
+    bool     use_fork   = true;
     Address* peer       = Address_new_port( 0 );
     IO*      connection = NULL;
     Path*    srvDir     = Path_CurrentDirectory();
 
-    while ( KeepAlive && IO_accept( self->socket, peer, &connection ) )
+    while ( KeepAlive )
     {
-        fflush( stdout );
-        fflush( stderr );
-
-        pid_t pid = fork();
-
-        if ( 0 == pid )
+        if ( IO_accept( self->socket, peer, &connection ) )
         {
-            int factor = 1000;
-
-            /*
-             *  Kludge to stop Safari from crashing.
-             */
-            usleep( 10 * factor );
-
-            HTTPServer_Process_srvDir_connection( srvDir, connection );
-            KeepAlive = false;
+            if ( use_fork )
+            {
+                if ( Platform_Fork() )
+                {
+                    Platform_Wait();
+                }
+                else
+                {
+                    HTTPServer_Process_srvDir_peer_connection_defaultDomain( srvDir, peer, connection, self->defaultDomain );
+                    KeepAlive = false;
+                }
+            }
+            else
+            {
+                HTTPServer_Process_srvDir_peer_connection_defaultDomain( srvDir, peer, connection, self->defaultDomain );
+            }
+            IO_free( &connection );
         }
-        else
-        {
-            pid_t any_children = -1;                    // Wait for any child process.
-            int*  stat_loc     = NULL;                  // Don't care about result.
-            int   dont_block   = WNOHANG | WUNTRACED;   // Do not block if no processes.
-
-            while ( 0 < waitpid( any_children, stat_loc, dont_block ) );
-        }
-        IO_free( &connection );
     }
 
     Path_free( &srvDir );
     Address_free( &peer );
 }
 
+bool
+HTTPServer_hasLocalDomain( HTTPServer* self )
+{
+    return (null != self->defaultDomain);
+}
+
+void
+HTTPServer_setDefaultDomain( HTTPServer*  self, const String* defaultDomain )
+{
+    if ( defaultDomain )
+    {
+        String_free( &self->defaultDomain );
+        self->defaultDomain = String_substring_index( defaultDomain, 0 );
+    }
+}
+
 void
 HTTPServer_Panic()
 {
-    fprintf( stdout, "Panic! Could not allocate memory for HTTP server.\n" );
+    fprintf( stderr, "Panic! Could not allocate memory for HTTP server.\n" );
 }
 
 void
 HTTPServer_InvalidPort()
 {
-    fprintf( stdout, "Error! Could not bind to privileged or in use port.\n" );
+    fprintf( stderr, "Error! Could not bind to privileged or in use port.\n" );
 }
 
 void
-HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
+HTTPServer_Process_srvDir_peer_connection_defaultDomain( const Path* srvDir, const Address* peer, IO* connection, const String* defaultDomain )
 {
-    fprintf( stdout, "START\n" );
+    if ( Debug ) fprintf( stdout, "START\n" );
 
-    HTTPRequest* request = HTTPRequest_Parse( connection );
+    /*
+     *  Kludge to stop Safari from crashing.
+     */
+    Platform_MilliSleep( 10 );
+
+    HTTPRequest* request = HTTPRequest_Parse( peer, connection, defaultDomain );
 
     if ( 1 )
     {
@@ -165,11 +182,14 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
         const String* method     = HTTPRequest_getMethod   ( request );
         const String* origin     = HTTPRequest_getOrigin   ( request );
 
-        fprintf( stdout, "Request: %s\n", String_getChars( start_line ) );
-        fprintf( stdout, "Method:  %s\n", String_getChars( method     ) );
-        fprintf( stdout, "Host:    %s\n", String_getChars( host       ) );
-        fprintf( stdout, "Port:    %s\n", String_getChars( port       ) );
-        fprintf( stdout, "Origin:  %s\n", String_getChars( origin     ) );
+        if ( Debug )
+        {
+            fprintf( stdout, "Request: %s\n", String_getChars( start_line ) );
+            fprintf( stdout, "Method:  %s\n", String_getChars( method     ) );
+            fprintf( stdout, "Host:    %s\n", String_getChars( host       ) );
+            fprintf( stdout, "Port:    %s\n", String_getChars( port       ) );
+            fprintf( stdout, "Origin:  %s\n", String_getChars( origin     ) );
+        }
 
         if ( 0 )
         {}
@@ -182,7 +202,9 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
             IO_write( connection, status );
             IO_write( connection, end    );
 
-            fprintf( stdout, "Response: %s\n", status );
+            if ( Debug ) fprintf( stdout, "Response: %s\n", status );
+
+            HTTPRequest_log_status( request, status, 400 );
         }
         else
         if ( HTTPRequest_isIPTarget( request ) )
@@ -193,7 +215,9 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
             IO_write( connection, status );
             IO_write( connection, end    );
 
-            fprintf( stdout, "Response: %s\n", status );
+            if ( Debug ) fprintf( stdout, "Response: %s\n", status );
+
+            HTTPRequest_log_status( request, status, 202 );
         }
         else
         if ( 1 )
@@ -212,7 +236,9 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
                 IO_write( connection, status );
                 IO_write( connection, end    );
 
-                fprintf( stdout, "Response: %s\n", status );
+                if ( Debug ) fprintf( stdout, "Response: %s\n", status );
+
+                HTTPRequest_log_status( request, status, 404 );
             }
             else
             if ( String_contentEquals( method, "OPTIONS" ) )
@@ -234,8 +260,10 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
                     IO_write( connection, StringBuffer_getChars( headers ) );
                     IO_write( connection, end                              );
 
-                    fprintf( stdout, "Options Response: %s", status                           );
-                    fprintf( stdout, "Options Response: %s", StringBuffer_getChars( headers ) );
+                    if ( Debug ) fprintf( stdout, "Options Response: %s", status                           );
+                    if ( Debug ) fprintf( stdout, "Options Response: %s", StringBuffer_getChars( headers ) );
+
+                    HTTPRequest_log_status( request, status, 204 );
                 }
                 StringBuffer_free( &headers );
             }
@@ -247,14 +275,16 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
                     const char* status = "HTTP/1.0 200 OK \r\n";
                     const char* end    = "\r\n";
 
-                    const File* file = ArrayOfFile_get_index( files, 0 );
+                    const File* file           = ArrayOfFile_get_index( files, 0 );
+                    const char* mime_type      = File_getMimeType( file );
+                    int         content_length = ArrayOfFile_sizeOfFiles( files );
 
-                    StringBuffer_append_chars ( headers, "Content-Type: "                     );
-                    StringBuffer_append_chars ( headers, File_getMimeType( file )             );
-                    StringBuffer_append_chars ( headers, end                                  );
-                    StringBuffer_append_chars ( headers, "Content-Length: "                   );
-                    StringBuffer_append_number( headers, ArrayOfFile_sizeOfFiles( files ) + 2 );
-                    StringBuffer_append_chars ( headers, end                                  );
+                    StringBuffer_append_chars ( headers, "Content-Type: "                   );
+                    StringBuffer_append_chars ( headers, mime_type                          );
+                    StringBuffer_append_chars ( headers, end                                );
+                    StringBuffer_append_chars ( headers, "Content-Length: "                 );
+                    StringBuffer_append_number( headers, content_length                     );
+                    StringBuffer_append_chars ( headers, end                                );
 
                     if ( String_getLength( origin ) )
                     {
@@ -287,23 +317,32 @@ HTTPServer_Process_srvDir_connection( const Path* srvDir, IO* connection )
                             File_open( (File*) file );
                             IO_sendFile( connection, File_getIO( file ) );
                             File_close( (File*) file );
+
+                            if ( Debug )
+                            {
+                                const char* _filepath = String_getChars( File_getFilePath( file ) );
+                                int         _bytesize = File_getByteSize( file );
+
+                                fprintf( stdout, "Returning file length: %i, name: %s\n", _bytesize, _filepath );
+                            }
                         }
                     }
-                    IO_write( connection, end );
 
-                    fprintf( stdout, "Response: %s", status                           );
-                    fprintf( stdout, "Response: %s", StringBuffer_getChars( headers ) );
+                    if ( Debug ) fprintf( stdout, "Response: %s", status                           );
+                    if ( Debug ) fprintf( stdout, "Response: %s", StringBuffer_getChars( headers ) );
+
+                    HTTPRequest_log_status( request, status, 200 );
                 }
                 StringBuffer_free( &headers );
             }
             ArrayOfFile_free( &files );
         }
-        fprintf( stdout, "END\n" );
+        if ( Debug ) fprintf( stdout, "END\n" );
         fflush( stdout );
     }
     HTTPRequest_free( &request );
 
-    MemInfo();
+    if ( Debug ) MemInfo();
 }
 
 static
@@ -345,10 +384,13 @@ HTTPServer_DetermineFiles__srvDir_request( const Path* srvDir, const HTTPRequest
     String*       reverse_host = String_reverseParts_separator( host, '.'     );
     const char*  _reverse_host = String_getChars              ( reverse_host  );
 
-    fprintf( stdout, "host:     %s --> %s\n", _host, _reverse_host            );
-    fprintf( stdout, "srv:      %s\n",        _srv                            );
-    fprintf( stdout, "resource: %s\n",        _resource                       );
-    fprintf( stdout, "target:   %s/%s%s\n",   _srv, _reverse_host, _resource );
+    if ( Debug )
+    {
+        fprintf( stdout, "host:     %s --> %s\n", _host, _reverse_host            );
+        fprintf( stdout, "srv:      %s\n",        _srv                            );
+        fprintf( stdout, "resource: %s\n",        _resource                       );
+        fprintf( stdout, "target:   %s/%s%s\n",   _srv, _reverse_host, _resource );
+    }
 
     if ( 1 )
     {
@@ -394,8 +436,8 @@ HTTPServer_DetermineFiles__srvDir_request( const Path* srvDir, const HTTPRequest
                     }
                 }
             }
-            Path_free  ( &alt          );
-            Path_free  ( &path         );
+            Path_free  ( &alt  );
+            Path_free  ( &path );
         }
         Path_free( &site_dir );
     }
@@ -547,17 +589,17 @@ HTTPServer_DiscoverFilesFrom_siteDir_resources_files( const Path* siteDir, const
                             ArrayOfFile_append_file( files, &f );
                         }
 
+                        if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "breadcrumbs.htm" )) )
+                        {
+                            ArrayOfFile_append_file( files, &f );
+                        }
+
                         JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files( siteDir, jx_path_parts, "nav?.htm", files );
 
                         if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "nav_end.htm" )) )
                         {
                             ArrayOfFile_append_file( files, &f );
                         }
-                    }
-
-                    if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "breadcrumbs.htm" )) )
-                    {
-                        ArrayOfFile_append_file( files, &f );
                     }
 
                     if ( (f = JuxtaPage_FindFile_siteDir_jxPathParts_filename( siteDir, jx_path_parts, "header.htm" )) )
@@ -626,7 +668,7 @@ File* JuxtaPage_FindFile_siteDir_jxPathParts_filename( const Path* siteDir, cons
                 if ( f )
                 {
                     Path* trial_path = Path_child( index_dir, filename );
-                    fprintf( stderr, "Found: %20s --> %s\n", filename, Path_getAbsolute( trial_path ) );
+                    if ( Debug ) fprintf( stderr, "Found: %20s --> %s\n", filename, Path_getAbsolute( trial_path ) );
                     Path_free( &trial_path );
                 }
             }
@@ -648,7 +690,7 @@ File* JuxtaPage_FindFile_siteDir_jxPathParts_filename( const Path* siteDir, cons
                     if ( f )
                     {
                         Path* trial_path = Path_child( target_path, filename );
-                        fprintf( stderr, "Found: %20s --> %s\n", filename, Path_getAbsolute( trial_path ) );
+                        if ( Debug ) fprintf( stderr, "Found: %20s --> %s\n", filename, Path_getAbsolute( trial_path ) );
                         Path_free( &trial_path );
                     }
                 }
@@ -671,7 +713,7 @@ File* JuxtaPage_FindFile_siteDir_jxPathParts_filename( const Path* siteDir, cons
                 if ( f )
                 {
                     Path* trial_path = Path_child( site_dir, filename );
-                    fprintf( stderr, "Found: %20s --> %s\n", filename, Path_getAbsolute( trial_path ) );
+                    if ( Debug ) fprintf( stderr, "Found: %20s --> %s\n", filename, Path_getAbsolute( trial_path ) );
                     Path_free( &trial_path );
                 }
             }
