@@ -1,6 +1,7 @@
-arch    := $(shell uname)
-cpu     := $(shell uname -m)
-version := 1.5
+arch     := $(shell uname)
+cpu      := $(shell uname -m)
+version  := 1.5
+includes := -Isource/include
 
 all: dir obj bin
 
