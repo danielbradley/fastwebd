@@ -310,6 +310,19 @@ Arguments_has_flag( const Arguments*  self, const char* flag )
     return ret;
 }
 
+static Array*
+Array_destruct( Array* self )
+{
+    Array_empty( self );
+
+    self->count    = 0;
+    self->capacity = 0;
+
+    DeleteArray( &self->elements );
+
+    return self;
+}
+
 Array*
 Array_new()
 {
@@ -326,6 +339,7 @@ Array_new()
     return self;
 }
 
+/*
 Array*
 Array_new_free( void*(*free)(void**) )
 {
@@ -340,19 +354,7 @@ Array_new_free( void*(*free)(void**) )
     }
     return self;
 }
-
-Array*
-Array_destruct( Array* self )
-{
-    Array_empty( self );
-
-    self->count    = 0;
-    self->capacity = 0;
-
-    DeleteArray( &self->elements );
-
-    return self;
-}
+*/
 
 /*
 Array*
@@ -1699,7 +1701,7 @@ String_trimEnd( String* self )
 Array*
 String_toArray_separator( const String* self, char separator )
 {
-    Array* parts = Array_new_free( (Free) Platform_Delete );
+    Array* parts = Array_new(); Array_setFree( parts, (Free) Platform_Delete );
 
     int loop  = 1;
     int start = 0;
