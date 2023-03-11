@@ -15,6 +15,7 @@ struct _HTTPHeader
 
 struct _HTTPRequest
 {
+    Object  super;
     bool    valid;
     bool    ip_target;
     String* startLine;
@@ -28,12 +29,35 @@ struct _HTTPRequest
     Array*  headers;
 };
 
+static
+HTTPRequest*
+HTTPRequest_destruct( HTTPRequest* self )
+{
+    if ( self )
+    {
+        Delete( &self->startLine    );
+        Delete( &self->method       );
+        Delete( &self->resource     );
+        Delete( &self->version      );
+        Delete( &self->host         );
+        Delete( &self->port         );
+        Delete( &self->origin       );
+        Delete( &self->forwardedFor );
+
+        Array_setFree( self->headers, (void* (*)( void** )) HTTPHeader_free );
+        Delete( &self->headers );
+    }
+    return self;
+}
+
 HTTPRequest*
 HTTPRequest_new()
 {
     HTTPRequest* self = New( sizeof( HTTPRequest ) );
     if ( self )
     {
+        Object_init( &self->super, (Destructor) HTTPRequest_destruct );
+
         self->valid        = false;
         self->ip_target    = false;
         self->startLine    = String_new( "" );
@@ -47,27 +71,6 @@ HTTPRequest_new()
         self->headers      = Array_new();
     }
     return self;
-}
-
-HTTPRequest*
-HTTPRequest_free( HTTPRequest** self )
-{
-    if ( *self )
-    {
-        Delete( &(*self)->startLine    );
-        Delete( &(*self)->method       );
-        Delete( &(*self)->resource     );
-        Delete( &(*self)->version      );
-        Delete( &(*self)->host         );
-        Delete( &(*self)->port         );
-        Delete( &(*self)->origin       );
-        Delete( &(*self)->forwardedFor );
-
-        Array_setFree( (*self)->headers, (void* (*)( void** )) HTTPHeader_free );
-        Delete( &(*self)->headers );
-    }
-
-    return Delete( self );
 }
 
 bool

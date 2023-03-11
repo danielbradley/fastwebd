@@ -2,7 +2,7 @@
 #define LIBHTTP_HTTPREQUEST_H
 
 HTTPRequest*  HTTPRequest_new();
-HTTPRequest*  HTTPRequest_free           (       HTTPRequest** self );
+//HTTPRequest*  HTTPRequest_free           (       HTTPRequest** self );
 
       bool    HTTPRequest_isValid        ( const HTTPRequest*  self );
       bool    HTTPRequest_isIPTarget     ( const HTTPRequest*  self );

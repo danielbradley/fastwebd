@@ -340,7 +340,7 @@ HTTPServer_Process_srvDir_peer_connection_defaultDomain( const Path* srvDir, con
         if ( Debug ) fprintf( stdout, "END\n" );
         fflush( stdout );
     }
-    HTTPRequest_free( &request );
+    Delete( &request );
 
     if ( Debug ) MemInfo();
 }
