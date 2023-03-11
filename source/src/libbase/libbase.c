@@ -50,6 +50,7 @@ struct _Arguments
 
 struct _Array
 {
+    Object super;
     void*(*free)(void**);
     int    count;
     int    capacity;
@@ -242,12 +243,13 @@ Arguments_destruct( Arguments* self )
 {
     if ( self )
     {
-        Array_free     ( &self->keyValues );
+        Delete         ( &self->keyValues );
         Object_destruct( &self->super     );
     }
     return self;
 }
 
+/*
 Arguments*
 Arguments_free( Arguments** self )
 {
@@ -258,6 +260,7 @@ Arguments_free( Arguments** self )
     }
     return null;
 }
+*/
 
 int
 Arguments_getIntFor_flag_default( const Arguments* self, const char* flag, int _default )
@@ -320,6 +323,8 @@ Array_new()
     Array* self = New( sizeof( Array ) );
     if ( self )
     {
+        Object_init( &self->super, (Destructor) Array_destruct );
+
         self->free     = null;
         self->count    = 0;
         self->capacity = DEFAULT_CAPACITY;
@@ -334,6 +339,7 @@ Array_new_free( void*(*free)(void**) )
     Array* self = New( sizeof( Array ) );
     if ( self )
     {
+        Object_init( &self->super, (Destructor) Array_destruct );
         self->free     = free;
         self->count    = 0;
         self->capacity = DEFAULT_CAPACITY;
@@ -355,6 +361,7 @@ Array_destruct( Array* self )
     return self;
 }
 
+/*
 Array*
 Array_free( Array** self )
 {
@@ -366,7 +373,9 @@ Array_free( Array** self )
     }
     return null;
 }
+*/
 
+/*
 Array*
 Array_free_destructor( Array** self, void* (*free)( void** ) )
 {
@@ -377,6 +386,16 @@ Array_free_destructor( Array** self, void* (*free)( void** ) )
         Array_free( self );
     }
     return 0;
+}
+*/
+
+void
+Array_setFree( Array* self, void* (*free)( void** ) )
+{
+    if ( self )
+    {
+        self->free = free;
+    }
 }
 
 int
@@ -567,7 +586,7 @@ ArrayOfFile* ArrayOfFile_new()
     ArrayOfFile* self = New( sizeof(ArrayOfFile) );
     if ( self )
     {
-        self->files = Array_new();
+        self->files = Array_new_free( (void *(*)(void **)) File_free );
     }
     return self;
 }
@@ -576,8 +595,8 @@ ArrayOfFile* ArrayOfFile_free( ArrayOfFile** self )
 {
     if ( *self )
     {
-        Array_free_destructor( &(*self)->files, (void *(*)(void **)) File_free );
-        Array_free( &(*self)->files );
+        //Array_free_destructor( &(*self)->files, (void *(*)(void **)) File_free );
+        Delete( &(*self)->files );
     }
     return Delete( self );
 }
@@ -1677,7 +1696,8 @@ String_reverseParts_separator( const String* self, char separator )
                 }
             }
         }
-        Array_free_destructor( &parts, (void *(*)(void **)) String_free );
+        Array_setFree( parts, (void *(*)(void **)) String_free );
+        Delete( &parts );
     }
     reversed = String_new( StringBuffer_getChars( buffer ) );
 

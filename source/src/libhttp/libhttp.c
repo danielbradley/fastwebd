@@ -62,7 +62,9 @@ HTTPRequest_free( HTTPRequest** self )
         String_free( &(*self)->port         );
         String_free( &(*self)->origin       );
         String_free( &(*self)->forwardedFor );
-        Array_free_destructor( &(*self)->headers, (void* (*)( void** )) HTTPHeader_free );
+
+        Array_setFree( (*self)->headers, (void* (*)( void** )) HTTPHeader_free );
+        Delete( &(*self)->headers );
     }
 
     return Delete( self );

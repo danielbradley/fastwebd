@@ -35,7 +35,7 @@ int main( int argc, char** argv )
 
     SysLog_Stop();
 
-    Arguments_free( &arguments );
+    Delete( &arguments );
 
     Exit( 0 );
 }
