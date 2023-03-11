@@ -24,7 +24,7 @@ tar:
 	cd ..; tar --disable-copyfile --no-xattrs --exclude=".*" --exclude="_*" -jcvf fastwebd/_tar/fastwebd-$(version).tar.bz2 fastwebd/{Makefile,source}
 
 run:
-	cd share/www; ../../_bin/$(arch)-$(cpu)/fastwebd
+	cd share/www; ../../_bin/$(arch)-$(cpu)/fastwebd --single --default-domain juxtapage.test --port 8080 --wait 10
 
 clean:
 	rm -rf _bin _obj _tar
