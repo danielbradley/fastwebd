@@ -8,6 +8,7 @@ static String* HTTPRequest_ReadLine( IO* connection    );
 
 struct _HTTPHeader
 {
+    Object  super;
     String* line;
     String* name;
     String* value;
@@ -44,7 +45,7 @@ HTTPRequest_destruct( HTTPRequest* self )
         Delete( &self->origin       );
         Delete( &self->forwardedFor );
 
-        Array_setFree( self->headers, (void* (*)( void** )) HTTPHeader_free );
+        Array_setFree( self->headers, (void* (*)( void** )) Platform_Delete );
         Delete( &self->headers );
     }
     return self;
@@ -395,29 +396,31 @@ HTTPRequest_ReadLine( IO* connection )
 static String* HTTPHeader_ExtractHeaderName ( const String* line );
 static String* HTTPHeader_ExtractHeaderValue( const String* line );
 
+static HTTPHeader*
+HTTPHeader_destruct( HTTPHeader* self )
+{
+    if ( self )
+    {
+        Delete( &self->line  );
+        Delete( &self->name  );
+        Delete( &self->value );
+    }
+    return self;
+}
+
 HTTPHeader*
 HTTPHeader_new( String** line )
 {
     HTTPHeader* self = New( sizeof( HTTPHeader ) );
     if ( self )
     {
+        Object_init( &self->super, (Destructor) HTTPHeader_destruct );
+
         self->line  = *line; *line = null;
         self->name  = HTTPHeader_ExtractHeaderName ( self->line );
         self->value = HTTPHeader_ExtractHeaderValue( self->line );
     }
     return self;
-}
-
-HTTPHeader*
-HTTPHeader_free( HTTPHeader** self )
-{
-    if ( *self )
-    {
-        Delete( &(*self)->line  );
-        Delete( &(*self)->name  );
-        Delete( &(*self)->value );
-    }
-    return Delete( self );
 }
 
 const String*
