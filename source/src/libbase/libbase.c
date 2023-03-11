@@ -406,14 +406,16 @@ Array_empty( Array* self )
     {
         if ( self->elements[i] )
         {
-            if ( self->free )
-            {
-                self->free( &(self->elements[i]) );
-            }
-            else
-            {
-                self->elements[i] = 0;
-            }
+            self->elements[i] = Delete( &(self->elements[i]) );
+
+//            if ( self->free )
+//            {
+//                self->free( &(self->elements[i]) );
+//            }
+//            else
+//            {
+//                self->elements[i] = 0;
+//            }
             self->count--;
         }
     }
