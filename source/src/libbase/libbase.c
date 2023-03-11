@@ -1,4 +1,5 @@
 #include "libbase.h"
+#include "libbase.private.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -66,6 +67,7 @@ static void Array_resize( Array* self, int index );
 
 struct _Address
 {
+    Object super;
     struct sockaddr inner;
 };
 
@@ -76,12 +78,6 @@ struct _File
     const char* mimeType;
     IO*         io;
     long long   byteSize;
-};
-
-struct _IO
-{
-    FD    descriptor;
-    FILE* stream;
 };
 
 struct _KeyValue
@@ -228,12 +224,14 @@ Arguments_new_count_arguments( int count, char** arguments )
         Object_init( &self->super, (Destructor) Arguments_destruct );
         self->keyValues = Array_new_free( (Free) KeyValue_free );
 
-        for ( int i=1; i < count; i++ )
+        int i = 0;
+        for ( i=1; i < count; i++ )
         {
             KeyValue* key_value = KeyValue_new( arguments[i-1], arguments[i] );
-
             Array_append_element( self->keyValues, (void**) &key_value );
         }
+        KeyValue* key_value = KeyValue_new( arguments[i-1], "" );
+        Array_append_element( self->keyValues, (void**) &key_value );
     }
     return self;
 }
@@ -274,7 +272,7 @@ Arguments_getIntFor_flag_default( const Arguments* self, const char* flag, int _
         if ( KeyValue_keyEquals_chars( keyval, flag ) )
         {
             const String* value = KeyValue_getValue( keyval );
-            ret                 = String_toNumber( value );
+            int           ret   = String_toNumber_default( value, _default );
             break;
         }
     }
@@ -634,25 +632,35 @@ ArrayOfFile_sizeOfFiles( const ArrayOfFile* self )
 }
 
 Address*
+Address_destruct( Address* self )
+{
+    return self;
+}
+
+Address*
 Address_new_port( short port )
 {
-    Address* address = New( sizeof( Address ) );
-    if ( address )
+    Address* self = New( sizeof( Address ) );
+    if ( self )
     {
-        struct sockaddr_in* inner = (struct sockaddr_in*) &address->inner;
+        Object_init( &self->super, (Destructor) Address_destruct );
+
+        struct sockaddr_in* inner = (struct sockaddr_in*) &self->inner;
 
         inner->sin_family      = AF_INET;
         inner->sin_port        = htons( port );
         inner->sin_addr.s_addr = htonl( INADDR_ANY );
     }
-    return address;
+    return self;
 }
 
+/*
 Address*
 Address_free( Address** self )
 {
     return Delete( self );
 }
+*/
 
 String*
 Address_origin( const Address* self )
@@ -1030,19 +1038,23 @@ IO* IO_free( IO** self )
     return Delete( self );
 }
 
-bool IO_bind_address_wait( IO* self, Address* address, bool wait )
+bool IO_bind_address_wait( IO* self, Address* address, int wait )
 {
     int result = 0;
     do
     {
-        result = bind( self->descriptor, &address->inner, sizeof( Address ) );
+        result = bind( self->descriptor, &address->inner, sizeof( struct sockaddr ) );
         if (0 != result)
         {
-            Platform_SecondSleep( 2 );
+            printf( "Port is busy, waiting(%i)...\n", wait );
+            IO_PrintError( stderr );
+            Platform_SecondSleep( 1 );
+
+            wait--;
+            result = 1;
         }
     }
-    while ( wait && result );
-
+    while ( (wait > 0) && result );
     return (0 == result);
 }
 
@@ -1583,9 +1595,12 @@ String_substring_index_length( const String* self, int index, int length )
 }
 
 int
-String_toNumber( const String* self )
+String_toNumber_default( const String* self, int _default )
 {
-    return atoi( self->data );
+    int base10 = 10;
+    int value  = strtol( self->data, (char**)NULL, base10 );
+
+    return (EINVAL == errno) ? _default : value;
 }
 
 int

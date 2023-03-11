@@ -328,7 +328,7 @@ HTTPRequest_Parse( const Address* peer, IO* connection, const String* localDomai
 
                                             if ( String_isNumeric( first_quad ) )
                                             {
-                                                int number = String_toNumber( first_quad );
+                                                int number = String_toNumber_default( first_quad, 255 );
 
                                                 if ( number < 255 ) request->ip_target = true;
 

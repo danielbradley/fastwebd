@@ -71,7 +71,7 @@ HTTPServer_free( HTTPServer** self )
     if ( *self )
     {
         (*self)->port = 0;
-        Address_free( &(*self)->loopback      );
+        Delete      ( &(*self)->loopback      );
         IO_free     ( &(*self)->socket        );
         String_free ( &(*self)->defaultDomain );
     }
@@ -79,7 +79,7 @@ HTTPServer_free( HTTPServer** self )
 }
 
 bool
-HTTPServer_listen_wait( HTTPServer* self, bool wait )
+HTTPServer_listen_wait( HTTPServer* self, int wait )
 {
     bool status = false;
 
@@ -131,7 +131,7 @@ HTTPServer_acceptConnections( HTTPServer* self )
     }
 
     Path_free( &srvDir );
-    Address_free( &peer );
+    Delete( &peer );
 }
 
 bool

@@ -1,12 +1,7 @@
 #include "libbase.h"
+#include "libbase.private.h"
 
 #include <netinet/ip.h>
-
-struct _IO
-{
-    FD    descriptor;
-    FILE* stream;
-};
 
 int
 IO_sendFile( IO* self, IO* file )

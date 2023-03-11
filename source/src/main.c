@@ -11,7 +11,12 @@ int main( int argc, char** argv )
     {
         const String* default_domain = Arguments_getStringFor_flag_default( arguments, "--default-domain", null );
         int           port           = Arguments_getIntFor_flag_default   ( arguments, "--port",           8080 );
-        bool          wait           = Arguments_has_flag                 ( arguments, "--wait"                 );
+        int           wait           = Arguments_getIntFor_flag_default   ( arguments, "--wait",           10   );
+
+        if ( !Arguments_has_flag( arguments, "--wait" ) )
+        {
+            wait = 1; // One attempt.
+        }
 
         HTTPServer* server = HTTPServer_new_port( port );
 

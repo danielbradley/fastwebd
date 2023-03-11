@@ -3,8 +3,6 @@
 
 Address* Address_new_port( short port );
 
-Address* Address_free( Address** self );
-
 String*  Address_origin( const Address* self );
 
 #endif
