@@ -17,8 +17,6 @@
 #include <grp.h>
 #include <signal.h>
 
-#define NOT_FOUND -1
-
 #define DEFAULT_CAPACITY      255
 #define NOT_FOUND            -1
 
