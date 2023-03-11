@@ -12,6 +12,7 @@ const char*   String_getChars              ( const String*  self );
 
       String* String_extension             ( const String*, const char separator );
       bool    String_isNumeric             ( const String*  self );
+      bool    String_isURLPath             ( const String*  self );
       bool    String_startsWith            ( const String*  self, const char* prefix );
       String* String_substring_index       ( const String*  self, int index );
       String* String_substring_index_length( const String*  self, int index, int len );

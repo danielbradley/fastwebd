@@ -1556,6 +1556,69 @@ String_isNumeric( const String*  self )
 }
 
 bool
+String_isURLPath( const String* self )
+{
+    const char* chars = String_getChars ( self );
+    int         n     = String_getLength( self );
+    char        ch;
+
+    if ( '/' != chars[0] ) return false;
+
+    for ( int i=0; i < n; i++ )
+    {
+        ch = chars[i];
+
+        switch ( ch )
+        {
+        // eos
+        case '\0':
+            continue;
+
+        // unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
+        case '-': //
+        case '.': //
+            if ( '.' == chars[i+1] ) return false;
+        case '_': // 32
+        case '~': //
+            continue;
+
+        // gen-delims = ":" / "/" / "?" / "#" / "[" / "]" / "@"
+        case ':': //
+        case '/': //
+            if ( '/' == chars[i+1] ) return false;
+        case '?': //
+        case '#': //
+        case '[': //
+        case ']': //
+        case '@': //
+            continue;
+
+        // sub-delims  = "!" / "$" / "&" / "'" / "(" / ")" / "*" / "+" / "," / ";" / "="
+        case '!': //
+        case '$': //
+        case '&': //
+        case '\'': //
+        case '(': //
+        case ')': //
+        case '*': //
+        case '+': //
+        case ',': //
+        case ';': //
+        case '=': //
+            continue;
+
+        default:
+            if ( ('a' <= ch) && (ch <= 'z') ) continue;
+            if ( ('A' <= ch) && (ch <= 'Z') ) continue;
+            if ( ('0' <= ch) && (ch <= '9') ) continue;
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool
 String_startsWith( const String* self, const char* prefix )
 {
     return (0 == strncmp( self->data, prefix, strlen( prefix ) ));
