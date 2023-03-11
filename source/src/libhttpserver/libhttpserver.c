@@ -170,7 +170,7 @@ HTTPServer_Process_srvDir_peer_connection_defaultDomain( const Path* srvDir, con
     /*
      *  Kludge to stop Safari from crashing.
      */
-    Platform_MilliSleep( 10 );
+    //Platform_MilliSleep( 10 );
 
     HTTPRequest* request = HTTPRequest_Parse( peer, connection, defaultDomain );
 
