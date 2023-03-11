@@ -130,8 +130,8 @@ HTTPServer_acceptConnections( HTTPServer* self )
         }
     }
 
-    Path_free( &srvDir );
-    Delete( &peer );
+    Delete( &srvDir );
+    Delete( &peer   );
 }
 
 bool
@@ -436,10 +436,10 @@ HTTPServer_DetermineFiles__srvDir_request( const Path* srvDir, const HTTPRequest
                     }
                 }
             }
-            Path_free  ( &alt  );
-            Path_free  ( &path );
+            Delete( &alt  );
+            Delete( &path );
         }
-        Path_free( &site_dir );
+        Delete( &site_dir );
     }
     String_free( &reverse_host );
 
@@ -670,10 +670,10 @@ File* JuxtaPage_FindFile_siteDir_jxPathParts_filename( const Path* siteDir, cons
                 {
                     Path* trial_path = Path_child( index_dir, filename );
                     if ( Debug ) fprintf( stderr, "Found: %20s --> %s\n", filename, Path_getAbsolute( trial_path ) );
-                    Path_free( &trial_path );
+                    Delete( &trial_path );
                 }
             }
-            Path_free( &index_dir );
+            Delete( &index_dir );
         }
 
         int number = Array_count( jxPathParts );
@@ -692,10 +692,10 @@ File* JuxtaPage_FindFile_siteDir_jxPathParts_filename( const Path* siteDir, cons
                     {
                         Path* trial_path = Path_child( target_path, filename );
                         if ( Debug ) fprintf( stderr, "Found: %20s --> %s\n", filename, Path_getAbsolute( trial_path ) );
-                        Path_free( &trial_path );
+                        Delete( &trial_path );
                     }
                 }
-                Path_free( &target_path );
+                Delete( &target_path );
             }
             String_free( &target_name );
         }
@@ -715,13 +715,13 @@ File* JuxtaPage_FindFile_siteDir_jxPathParts_filename( const Path* siteDir, cons
                 {
                     Path* trial_path = Path_child( site_dir, filename );
                     if ( Debug ) fprintf( stderr, "Found: %20s --> %s\n", filename, Path_getAbsolute( trial_path ) );
-                    Path_free( &trial_path );
+                    Delete( &trial_path );
                 }
             }
-            Path_free( &site_dir );
+            Delete( &site_dir );
         }
     }
-    Path_free( &content_dir );
+    Delete( &content_dir );
 
     return f;
 }

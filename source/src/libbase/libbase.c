@@ -90,6 +90,7 @@ struct _KeyValue
 
 struct _Path
 {
+    Object  super;
     String* absolute;
 };
 
@@ -861,7 +862,7 @@ File* File_CreateIfExists_path( Path** path )
     {
         File_free( &file );
     }
-    Path_free( &_path );
+    Delete( &_path );
 
     return file;
 }
@@ -1254,16 +1255,28 @@ Object_destruct( Object* self )
     self->destruct = null;
 }
 
+static Path* Path_destruct( Path* self )
+{
+    if ( self )
+    {
+        String_free( &self->absolute );
+    }
+    return self;
+}
+
 Path* Path_new( const char* absolute )
 {
     Path* self = New( sizeof( Path ) );
     if ( self )
     {
+        Object_init( &self->super, (Destructor) Path_destruct );
+
         self->absolute = String_new( absolute );
     }
     return self;
 }
 
+/*
 Path* Path_free( Path** self )
 {
     if ( *self )
@@ -1272,6 +1285,7 @@ Path* Path_free( Path** self )
     }
     return Delete( self );
 }
+*/
 
 const char* Path_getAbsolute( const Path* self )
 {
