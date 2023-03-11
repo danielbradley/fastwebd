@@ -102,9 +102,8 @@ HTTPServer_listen_wait( HTTPServer* self, int wait )
 }
 
 void
-HTTPServer_acceptConnections( HTTPServer* self )
+HTTPServer_acceptConnections_fork( HTTPServer* self, bool fork )
 {
-    bool     use_fork   = true;
     Address* peer       = Address_new_port( 0 );
     IO*      connection = NULL;
     Path*    srvDir     = Path_CurrentDirectory();
@@ -113,7 +112,7 @@ HTTPServer_acceptConnections( HTTPServer* self )
     {
         if ( IO_accept( self->socket, peer, &connection ) )
         {
-            if ( use_fork )
+            if ( fork )
             {
                 if ( Platform_Fork() )
                 {

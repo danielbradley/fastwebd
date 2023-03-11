@@ -12,6 +12,7 @@ int main( int argc, char** argv )
         const String* default_domain = Arguments_getStringFor_flag_default( arguments, "--default-domain", null );
         int           port           = Arguments_getIntFor_flag_default   ( arguments, "--port",           8080 );
         int           wait           = Arguments_getIntFor_flag_default   ( arguments, "--wait",           10   );
+        bool          single         = Arguments_has_flag                 ( arguments, "--single"               );
 
         if ( !Arguments_has_flag( arguments, "--wait" ) )
         {
@@ -31,8 +32,10 @@ int main( int argc, char** argv )
         }
         else
         {
-            HTTPServer_setDefaultDomain ( server, default_domain );
-            HTTPServer_acceptConnections( server                 );
+            bool fork = !single;
+
+            HTTPServer_setDefaultDomain      ( server, default_domain );
+            HTTPServer_acceptConnections_fork( server, fork           );
         }
 
         Delete( &server );
