@@ -647,7 +647,6 @@ HTTPServer_DiscoverFilesFrom_siteDir_resources_files( const Path* siteDir, const
                 }
             }
         }
-        Array_setFree( jx_path_parts, (void *(*)(void **)) Platform_Delete );
         Delete( &jx_path_parts );
     }
 }

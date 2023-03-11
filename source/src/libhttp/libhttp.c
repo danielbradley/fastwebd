@@ -44,9 +44,7 @@ HTTPRequest_destruct( HTTPRequest* self )
         Delete( &self->port         );
         Delete( &self->origin       );
         Delete( &self->forwardedFor );
-
-        Array_setFree( self->headers, (void* (*)( void** )) Platform_Delete );
-        Delete( &self->headers );
+        Delete( &self->headers      );
     }
     return self;
 }

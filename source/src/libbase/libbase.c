@@ -225,8 +225,6 @@ Arguments_new_count_arguments( int count, char** arguments )
         Object_init( &self->super, (Destructor) Arguments_destruct );
         self->keyValues = Array_new();
 
-        Array_setFree( self->keyValues, (Free) Platform_Delete );
-
         int i = 0;
         for ( i=1; i < count; i++ )
         {
@@ -337,60 +335,6 @@ Array_new()
     return self;
 }
 
-/*
-Array*
-Array_new_free( void*(*free)(void**) )
-{
-    Array* self = New( sizeof( Array ) );
-    if ( self )
-    {
-        Object_init( &self->super, (Destructor) Array_destruct );
-        self->free     = free;
-        self->count    = 0;
-        self->capacity = DEFAULT_CAPACITY;
-        self->elements = NewArray( sizeof( void* ), self->capacity );
-    }
-    return self;
-}
-*/
-
-/*
-Array*
-Array_free( Array** self )
-{
-    if ( self && *self )
-    {
-        Array_destruct( *self );
-
-        Delete( self );
-    }
-    return null;
-}
-*/
-
-/*
-Array*
-Array_free_destructor( Array** self, void* (*free)( void** ) )
-{
-    if ( *self )
-    {
-        (*self)->free = free;
-
-        Array_free( self );
-    }
-    return 0;
-}
-*/
-
-void
-Array_setFree( Array* self, void* (*free)( void** ) )
-{
-    if ( self )
-    {
-        self->free = free;
-    }
-}
-
 int
 Array_count( const Array* self )
 {
@@ -407,15 +351,6 @@ Array_empty( Array* self )
         if ( self->elements[i] )
         {
             self->elements[i] = Delete( &(self->elements[i]) );
-
-//            if ( self->free )
-//            {
-//                self->free( &(self->elements[i]) );
-//            }
-//            else
-//            {
-//                self->elements[i] = 0;
-//            }
             self->count--;
         }
     }
@@ -594,7 +529,6 @@ ArrayOfFile* ArrayOfFile_new()
         Object_init( &self->super, (Destructor) ArrayOfFile_destruct );
 
         self->files = Array_new();
-        Array_setFree( self->files, (Free) Platform_Delete );
     }
     return self;
 }
@@ -1701,7 +1635,7 @@ String_trimEnd( String* self )
 Array*
 String_toArray_separator( const String* self, char separator )
 {
-    Array* parts = Array_new(); Array_setFree( parts, (Free) Platform_Delete );
+    Array* parts = Array_new();
 
     int loop  = 1;
     int start = 0;
@@ -1764,7 +1698,6 @@ String_reverseParts_separator( const String* self, char separator )
                 }
             }
         }
-        Array_setFree( parts, (void *(*)(void **)) Platform_Delete );
         Delete( &parts );
     }
     reversed = String_new( StringBuffer_getChars( buffer ) );
