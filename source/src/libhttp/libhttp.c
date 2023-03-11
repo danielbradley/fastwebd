@@ -16,18 +16,27 @@ struct _HTTPHeader
 
 struct _HTTPRequest
 {
+    Object           super;
+    bool             valid;
+    bool             ip_target;
+    HTTPRequestLine* requestLine;
+    String*          startLine;
+    String*          method;
+    String*          resource;
+    String*          version;
+    String*          host;
+    String*          port;
+    String*          origin;
+    String*          forwardedFor;
+    Array*           headers;
+};
+
+struct _HTTPRequestLine
+{
     Object  super;
-    bool    valid;
-    bool    ip_target;
-    String* startLine;
     String* method;
     String* resource;
     String* version;
-    String* host;
-    String* port;
-    String* origin;
-    String* forwardedFor;
-    Array*  headers;
 };
 
 static
@@ -36,6 +45,7 @@ HTTPRequest_destruct( HTTPRequest* self )
 {
     if ( self )
     {
+        Delete( &self->requestLine  );
         Delete( &self->startLine    );
         Delete( &self->method       );
         Delete( &self->resource     );
@@ -59,6 +69,7 @@ HTTPRequest_new()
 
         self->valid        = false;
         self->ip_target    = false;
+        self->requestLine  = null;
         self->startLine    = String_new( "" );
         self->method       = String_new( "" );
         self->resource     = String_new( "" );
@@ -270,37 +281,48 @@ HTTPRequest_validate( HTTPRequest* self )
 HTTPRequest*
 HTTPRequest_Parse( const Address* peer, IO* connection, const String* localDomain )
 {
-    HTTPRequest* request = HTTPRequest_new();
-    if ( 1 )
+    HTTPRequest* request      = HTTPRequest_new();
+    String*      request_line = HTTPRequest_ReadLine( connection );
+
+    if ( request_line )
     {
-        String* line = HTTPRequest_ReadLine( connection );
+        //String* test = String_new( "GET / HTTP/1.1" );
+        //HTTPRequestLine* rl = HTTPRequestLine_new( test );
 
-        if ( line )
+        HTTPRequestLine* http_request_line = HTTPRequestLine_new( request_line );
+
+        if ( HTTPRequestLine_isValid( http_request_line ) )
         {
-            int end_method   = String_indexOf_ch_skip( line, ' ', 0 );
-            int end_resource = String_indexOf_ch_skip( line, ' ', 1 );
-            int len          = end_resource - (end_method + 1);
-
-            String* origin   = Address_origin               ( peer                               );
-            String* method   = String_substring_index_length( line,                0, end_method );
-            String* resource = String_substring_index_length( line, end_method   + 1, len        );
-            String* version  = String_substring_index       ( line, end_resource + 1             );
+            String* origin = Address_origin( peer );
             {
-                HTTPRequest_setStartLine( request, String_getChars( line     ) );
-                HTTPRequest_setMethod   ( request, String_getChars( method   ) );
-                HTTPRequest_setResource ( request, String_getChars( resource ) );
-                HTTPRequest_setVersion  ( request, String_getChars( version  ) );
-                HTTPRequest_setOrigin   ( request, String_getChars( origin   ) );
+                HTTPRequest_setStartLine( request, String_getChars( request_line                                     ) );
+                HTTPRequest_setMethod   ( request, String_getChars( HTTPRequestLine_getMethod  ( http_request_line ) ) );
+                HTTPRequest_setResource ( request, String_getChars( HTTPRequestLine_getResource( http_request_line ) ) );
+                HTTPRequest_setVersion  ( request, String_getChars( HTTPRequestLine_getVersion ( http_request_line ) ) );
+                HTTPRequest_setOrigin   ( request, String_getChars( origin                                           ) );
             }
-            Delete( &origin   );
-            Delete( &method   );
-            Delete( &resource );
-            Delete( &version  );
-        }
-        Delete( &line );
+            Delete( &origin );
 
-        if ( 1 )
-        {
+//            int end_method   = String_indexOf_ch_skip( line, ' ', 0 );
+//            int end_resource = String_indexOf_ch_skip( line, ' ', 1 );
+//            int len          = end_resource - (end_method + 1);
+//
+//            String* method   = String_substring_index_length( line,                0, end_method );
+//            String* resource = String_substring_index_length( line, end_method   + 1, len        );
+//            String* version  = String_substring_index       ( line, end_resource + 1             );
+//            {
+//                HTTPRequest_setStartLine( request, String_getChars( line     ) );
+//                HTTPRequest_setMethod   ( request, String_getChars( method   ) );
+//                HTTPRequest_setResource ( request, String_getChars( resource ) );
+//                HTTPRequest_setVersion  ( request, String_getChars( version  ) );
+//                HTTPRequest_setOrigin   ( request, String_getChars( origin   ) );
+//            }
+//            Delete( &origin   );
+//            Delete( &method   );
+//            Delete( &resource );
+//            Delete( &version  );
+
+            String* line;
             bool loop = true;
             do
             {
@@ -380,8 +402,15 @@ HTTPRequest_Parse( const Address* peer, IO* connection, const String* localDomai
             } while ( loop );
         }
 
+        Delete( &http_request_line );
+
+        //Delete( &test );
+        //Delete( &rl   );
+
         HTTPRequest_validate( request );
     }
+    Delete( &request_line );
+
     return request;
 }
 
@@ -473,3 +502,98 @@ HTTPHeader_ExtractHeaderValue( const String* line )
     }
 }
 
+static HTTPRequestLine*
+HTTPRequestLine_destruct( HTTPRequestLine* self )
+{
+    if ( self )
+    {
+        Delete( &self->method   );
+        Delete( &self->resource );
+        Delete( &self->version  );
+    }
+    return self;
+}
+
+HTTPRequestLine*
+HTTPRequestLine_new( String* line )
+{
+    HTTPRequestLine* self = New( sizeof( HTTPRequestLine ) );
+    if ( self )
+    {
+        Object_init( &self->super, (Destructor) HTTPRequestLine_destruct );
+
+        int end_method   = String_indexOf_ch_skip( line, ' ', 0 );
+        int end_resource = String_indexOf_ch_skip( line, ' ', 1 );
+        int len          = end_resource - (end_method + 1);
+        int difference   = end_resource - end_method;
+
+        if ( end_method >= 3 )
+        {
+            String* method = String_substring_index_length( line, 0, end_method );
+            if
+            (
+                String_contentEquals( method, "POST"    )
+                ||
+                String_contentEquals( method, "GET"     )
+                ||
+                String_contentEquals( method, "HEAD"    )
+                ||
+                String_contentEquals( method, "OPTIONS" )
+            )
+            {
+                self->method = Take( &method );
+            }
+            Delete( &method );
+        }
+
+        if ( len >= 1 )
+        {
+            String* resource = String_substring_index_length( line, end_method + 1, len );
+            if ( String_isURLPath( resource ) )
+            {
+                self->resource = Take( &resource );
+            }
+            Delete( &resource );
+        }
+
+        if ( len >= 1 )
+        {
+            String* version = String_substring_index( line, end_resource + 1 );
+            if
+            (
+                String_contentEquals( version,  "HTTP/1.0" )
+                ||
+                String_contentEquals( version,  "HTTP/1.1" )
+            )
+            {
+                self->version = Take( &version );
+            }
+            Delete( &version );
+        }
+    }
+    return self;
+}
+
+const String*
+HTTPRequestLine_getMethod( const HTTPRequestLine* self )
+{
+    return self->method;
+}
+
+const String*
+HTTPRequestLine_getResource( const HTTPRequestLine* self )
+{
+    return self->resource;
+}
+
+const String*
+HTTPRequestLine_getVersion( const HTTPRequestLine* self )
+{
+    return self->version;
+}
+
+bool
+HTTPRequestLine_isValid( const HTTPRequestLine* self )
+{
+    return (self->method && self->resource && self->version);
+}
