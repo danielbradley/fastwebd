@@ -22,13 +22,6 @@
 #define DEFAULT_CAPACITY      255
 #define NOT_FOUND            -1
 
-typedef enum _ObjectType
-{
-    ARRAY  = 0xCAFEBABE,
-    OBJECT = 0xBABECAFE
-
-} ObjectType;
-
 static       String* FGetLine( FILE* stream, size_t* len );
 
 //static
@@ -36,12 +29,6 @@ static       String* FGetLine( FILE* stream, size_t* len );
 
 static int Objects = 0;
 static int Arrays  = 0;
-
-struct _Object
-{
-    ObjectType type;
-    void*(*destruct)(void*);
-};
 
 struct _Arguments
 {

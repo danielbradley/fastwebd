@@ -32,4 +32,17 @@ typedef void*(*Destructor)(void*);
 #include "libbase/StringBuffer.h"
 #include "libbase/SysLog.h"
 
+typedef enum _ObjectType
+{
+    ARRAY  = 0xAABBCCDD,
+    OBJECT = 0xDDCCBBAA
+
+} ObjectType;
+
+struct _Object
+{
+    ObjectType type;
+    void*(*destruct)(void*);
+};
+
 #endif
