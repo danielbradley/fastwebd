@@ -259,16 +259,41 @@ Arguments_free( Arguments** self )
     return null;
 }
 
-String*
-Arguments_getIntFor_flag( const Arguments* self, const char* flag )
+int
+Arguments_getIntFor_flag_default( const Arguments* self, const char* flag, int _default )
 {
-    return null;
+    int ret = _default;
+    int n   = Array_count( self->keyValues );
+
+    for ( int i=0; i < n; i++ )
+    {
+        const KeyValue* keyval = Array_get_index( self->keyValues, i );
+        if ( KeyValue_keyEquals_chars( keyval, flag ) )
+        {
+            const String* value = KeyValue_getValue( keyval );
+            ret                 = String_toNumber( value );
+            break;
+        }
+    }
+    return ret;
 }
 
-String*
-Arguments_getStringFor_flag( const Arguments* self, const char* flag )
+const String*
+Arguments_getStringFor_flag_default( const Arguments* self, const char* flag, const String* _default )
 {
-    return null;
+    const String* ret = _default;
+    int           n   = Array_count( self->keyValues );
+
+    for ( int i=0; i < n; i++ )
+    {
+        const KeyValue* keyval = Array_get_index( self->keyValues, i );
+        if ( KeyValue_keyEquals_chars( keyval, flag ) )
+        {
+            ret = KeyValue_getValue( keyval );
+            break;
+        }
+    }
+    return ret;
 }
 
 Array*
@@ -1106,16 +1131,22 @@ KeyValue_free( KeyValue** self )
     return null;
 }
 
-String*
+const String*
 KeyValue_getKey( const KeyValue* self )
 {
     return self->key;
 }
 
-String*
+const String*
 KeyValue_getValue( const KeyValue*  self )
 {
     return self->value;
+}
+
+bool
+KeyValue_keyEquals_chars( const KeyValue*  self, const char* chars )
+{
+    return String_contentEquals( self->key, chars );
 }
 
 String*

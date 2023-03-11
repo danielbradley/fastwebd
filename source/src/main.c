@@ -5,33 +5,12 @@ int main( int argc, char** argv )
 {
     SysLog_Start();
 
+    Arguments* arguments = Arguments_new_count_arguments( argc, argv );
+
     SysLog_Log_chars( "Started " );
     {
-        String* default_domain = null;
-        int     port           = 8080;
-
-        for ( int i=1; i < argc; i++ )
-        {
-            String* arg = String_new( argv[i] );
-            if ( String_contentEquals( arg, "--default-domain" ) )
-            {
-                if ( (i+1) < argc )
-                {
-                    default_domain = String_new( argv[i+1] );
-                    i++;
-                }
-            }
-            else
-            if ( String_contentEquals( arg, "--port" ) )
-            {
-                if ( (i+1) < argc )
-                {
-                    port = atoi( argv[i+1] );
-                    i++;
-                }
-            }
-            String_free( &arg );
-        }
+        const String* default_domain = Arguments_getStringFor_flag_default( arguments, "--default-domain", null );
+        int           port           = Arguments_getIntFor_flag_default   ( arguments, "--port",           8080 );
 
         HTTPServer* server = HTTPServer_new_port( port );
 
@@ -51,10 +30,11 @@ int main( int argc, char** argv )
         }
 
         HTTPServer_free( &server );
-        String_free( &default_domain );
     }
 
     SysLog_Stop();
+
+    Arguments_free( &arguments );
 
     Exit( 0 );
 }
