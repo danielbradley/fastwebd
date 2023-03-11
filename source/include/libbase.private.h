@@ -4,8 +4,9 @@
 
 struct _IO
 {
-    FD    descriptor;
-    FILE* stream;
+    Object super;
+    FD     descriptor;
+    FILE*  stream;
 };
 
 #endif

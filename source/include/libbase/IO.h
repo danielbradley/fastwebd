@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 IO*     IO_new              ( FD*   descriptor );
-IO*     IO_free             ( IO**  self );
+//IO*     IO_free             ( IO**  self );
 bool    IO_bind_address_wait( IO*   self, Address* address, int wait );
 bool    IO_listen           ( IO*   self );
 bool    IO_accept           ( IO*   self, Address* peer, IO** connection );

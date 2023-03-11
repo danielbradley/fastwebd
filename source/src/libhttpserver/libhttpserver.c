@@ -72,7 +72,7 @@ HTTPServer_free( HTTPServer** self )
     {
         (*self)->port = 0;
         Delete      ( &(*self)->loopback      );
-        IO_free     ( &(*self)->socket        );
+        Delete     ( &(*self)->socket        );
         Delete ( &(*self)->defaultDomain );
     }
     return Delete( self );
@@ -126,7 +126,7 @@ HTTPServer_acceptConnections( HTTPServer* self )
             {
                 HTTPServer_Process_srvDir_peer_connection_defaultDomain( srvDir, peer, connection, self->defaultDomain );
             }
-            IO_free( &connection );
+            Delete( &connection );
         }
     }
 

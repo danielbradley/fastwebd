@@ -699,7 +699,7 @@ static File* File_destruct( File* self )
 
         if ( self->io )
         {
-            IO_free( &self->io );
+            Delete( &self->io );
         }
     }
     return self;
@@ -737,7 +737,7 @@ File* File_free( File** self )
 
         if ( (*self)->io )
         {
-            IO_free( &(*self)->io );
+            Delete( &(*self)->io );
         }
     }
     return Delete( self );
@@ -822,7 +822,7 @@ File* File_open( File* self )
 
 File* File_close( File* self )
 {
-    IO_free( &self->io );
+    Delete( &self->io );
 
     return self;
 }
@@ -1028,24 +1028,26 @@ void** Give( void* pointer )
     return tmp;
 }
 
+IO* IO_destruct( IO* self )
+{
+    if ( self )
+    {
+        IO_close( self );
+    }
+    return self;
+}
+
 IO* IO_new( FD* descriptor )
 {
     IO* self = New( sizeof( IO ) );
     if ( self )
     {
+        Object_init( &self->super, (Destructor) IO_destruct );
+
         self->descriptor  = *descriptor; *descriptor = 0;
         self->stream      = null;
     }
     return self;
-}
-
-IO* IO_free( IO** self )
-{
-    if ( *self )
-    {
-        IO_close( *self );
-    }
-    return Delete( self );
 }
 
 bool IO_bind_address_wait( IO* self, Address* address, int wait )
