@@ -54,14 +54,14 @@ HTTPRequest_free( HTTPRequest** self )
 {
     if ( *self )
     {
-        String_free( &(*self)->startLine    );
-        String_free( &(*self)->method       );
-        String_free( &(*self)->resource     );
-        String_free( &(*self)->version      );
-        String_free( &(*self)->host         );
-        String_free( &(*self)->port         );
-        String_free( &(*self)->origin       );
-        String_free( &(*self)->forwardedFor );
+        Delete( &(*self)->startLine    );
+        Delete( &(*self)->method       );
+        Delete( &(*self)->resource     );
+        Delete( &(*self)->version      );
+        Delete( &(*self)->host         );
+        Delete( &(*self)->port         );
+        Delete( &(*self)->origin       );
+        Delete( &(*self)->forwardedFor );
 
         Array_setFree( (*self)->headers, (void* (*)( void** )) HTTPHeader_free );
         Delete( &(*self)->headers );
@@ -85,7 +85,7 @@ HTTPRequest_isIPTarget( const HTTPRequest*  self )
 void
 HTTPRequest_setStartLine( HTTPRequest* self, const char* startLine )
 {
-    String_free( &self->startLine );
+    Delete( &self->startLine );
 
     self->startLine = String_new( startLine );
 
@@ -95,7 +95,7 @@ HTTPRequest_setStartLine( HTTPRequest* self, const char* startLine )
 void
 HTTPRequest_setMethod( HTTPRequest* self, const char* method )
 {
-    String_free( &self->method );
+    Delete( &self->method );
 
     self->method = String_new( method );
 
@@ -105,7 +105,7 @@ HTTPRequest_setMethod( HTTPRequest* self, const char* method )
 void
 HTTPRequest_setResource( HTTPRequest* self, const char* resource )
 {
-    String_free( &self->resource );
+    Delete( &self->resource );
 
     self->resource = String_new( resource );
 
@@ -115,7 +115,7 @@ HTTPRequest_setResource( HTTPRequest* self, const char* resource )
 void
 HTTPRequest_setVersion ( HTTPRequest* self, const char* version  )
 {
-    String_free( &self->version );
+    Delete( &self->version );
 
     self->version = String_new( version );
 
@@ -125,7 +125,7 @@ HTTPRequest_setVersion ( HTTPRequest* self, const char* version  )
 void
 HTTPRequest_setHost    ( HTTPRequest* self, const char* host )
 {
-    String_free( &self->host );
+    Delete( &self->host );
 
     self->host = String_new( host );
 
@@ -135,7 +135,7 @@ HTTPRequest_setHost    ( HTTPRequest* self, const char* host )
 void
 HTTPRequest_setPort    ( HTTPRequest* self, const char* port )
 {
-    String_free( &self->port );
+    Delete( &self->port );
 
     self->port = String_new( port );
 
@@ -145,7 +145,7 @@ HTTPRequest_setPort    ( HTTPRequest* self, const char* port )
 void
 HTTPRequest_setOrigin  ( HTTPRequest* self, const char* origin )
 {
-    String_free( &self->origin );
+    Delete( &self->origin );
 
     self->origin = String_new( origin );
 
@@ -155,7 +155,7 @@ HTTPRequest_setOrigin  ( HTTPRequest* self, const char* origin )
 void
 HTTPRequest_setForwardedFor( HTTPRequest* self, const char* forwardedFor )
 {
-    String_free( &self->forwardedFor );
+    Delete( &self->forwardedFor );
 
     self->forwardedFor = String_new( forwardedFor );
 
@@ -290,12 +290,12 @@ HTTPRequest_Parse( const Address* peer, IO* connection, const String* localDomai
                 HTTPRequest_setVersion  ( request, String_getChars( version  ) );
                 HTTPRequest_setOrigin   ( request, String_getChars( origin   ) );
             }
-            String_free( &origin   );
-            String_free( &method   );
-            String_free( &resource );
-            String_free( &version  );
+            Delete( &origin   );
+            Delete( &method   );
+            Delete( &resource );
+            Delete( &version  );
         }
-        String_free( &line );
+        Delete( &line );
 
         if ( 1 )
         {
@@ -338,11 +338,11 @@ HTTPRequest_Parse( const Address* peer, IO* connection, const String* localDomai
                                                     request->ip_target = false;
                                                 }
                                             }
-                                            String_free( &first_quad );
+                                            Delete( &first_quad );
                                         }
                                     }
-                                    String_free( &host );
-                                    String_free( &port );
+                                    Delete( &host );
+                                    Delete( &port );
                                 }
                                 else
                                 {
@@ -410,9 +410,9 @@ HTTPHeader_free( HTTPHeader** self )
 {
     if ( *self )
     {
-        String_free( &(*self)->line  );
-        String_free( &(*self)->name  );
-        String_free( &(*self)->value );
+        Delete( &(*self)->line  );
+        Delete( &(*self)->name  );
+        Delete( &(*self)->value );
     }
     return Delete( self );
 }

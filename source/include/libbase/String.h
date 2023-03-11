@@ -2,7 +2,7 @@
 #define FASTWEBD_STRING_H
 
       String* String_new                   ( const char*    ch   );
-      String* String_free                  (       String** self );
+//    String* String_free                  (       String** self );
 const char*   String_getChars              ( const String*  self );
       int     String_getLength             ( const String*  self );
 

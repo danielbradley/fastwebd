@@ -73,7 +73,7 @@ HTTPServer_free( HTTPServer** self )
         (*self)->port = 0;
         Delete      ( &(*self)->loopback      );
         IO_free     ( &(*self)->socket        );
-        String_free ( &(*self)->defaultDomain );
+        Delete ( &(*self)->defaultDomain );
     }
     return Delete( self );
 }
@@ -145,7 +145,7 @@ HTTPServer_setDefaultDomain( HTTPServer*  self, const String* defaultDomain )
 {
     if ( defaultDomain )
     {
-        String_free( &self->defaultDomain );
+        Delete( &self->defaultDomain );
         self->defaultDomain = String_substring_index( defaultDomain, 0 );
     }
 }
@@ -364,7 +364,7 @@ GenerateAltPath( const Path* site_dir, const String* resource )
 
             alt_path = Path_child( site_dir, StringBuffer_getChars( buffer ) );
         }
-        String_free      ( &real_resource );
+        Delete      ( &real_resource );
         StringBuffer_free( &buffer        );
     }
     return alt_path;
@@ -441,7 +441,7 @@ HTTPServer_DetermineFiles__srvDir_request( const Path* srvDir, const HTTPRequest
         }
         Delete( &site_dir );
     }
-    String_free( &reverse_host );
+    Delete( &reverse_host );
 
     return files;
 }
@@ -644,7 +644,7 @@ HTTPServer_DiscoverFilesFrom_siteDir_resources_files( const Path* siteDir, const
                 }
             }
         }
-        Array_setFree( jx_path_parts, (void *(*)(void **)) String_free );
+        Array_setFree( jx_path_parts, (void *(*)(void **)) Platform_Delete );
         Delete( &jx_path_parts );
     }
 }
@@ -697,7 +697,7 @@ File* JuxtaPage_FindFile_siteDir_jxPathParts_filename( const Path* siteDir, cons
                 }
                 Delete( &target_path );
             }
-            String_free( &target_name );
+            Delete( &target_name );
         }
 
         if ( !f )
@@ -743,5 +743,5 @@ JuxtaPage_FindFiles_siteDir_jxPathParts_pattern_files( const Path* siteDir,  con
             ArrayOfFile_append_file( files, &f );
         }
     }
-    String_free( &filename );
+    Delete( &filename );
 }

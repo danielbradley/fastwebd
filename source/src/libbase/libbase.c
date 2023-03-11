@@ -96,8 +96,9 @@ struct _Path
 
 struct _String
 {
-    int   length;
-    char* data;
+    Object super;
+    int    length;
+    char*  data;
 };
 
 struct _StringBuffer
@@ -703,8 +704,8 @@ static File* File_destruct( File* self )
 {
     if ( self )
     {
-        String_free( &self->filepath  );
-        String_free( &self->extension );
+        Delete( &self->filepath  );
+        Delete( &self->extension );
 
         self->byteSize = 0;
 
@@ -741,8 +742,8 @@ File* File_free( File** self )
 {
     if ( *self )
     {
-        String_free( &(*self)->filepath  );
-        String_free( &(*self)->extension );
+        Delete( &(*self)->filepath  );
+        Delete( &(*self)->extension );
 
         (*self)->byteSize = 0;
 
@@ -849,7 +850,7 @@ File_isMimeType( const File* self, const char* mimeType )
     {
         is_mime_type = true;
     }
-    String_free( &mime );
+    Delete( &mime );
 
     return is_mime_type;
 }
@@ -1188,8 +1189,8 @@ KeyValue_destruct( KeyValue* self )
 {
     if ( self )
     {
-        String_free( &self->key   );
-        String_free( &self->value );
+        Delete( &self->key   );
+        Delete( &self->value );
     }
     return self;
 }
@@ -1259,7 +1260,7 @@ static Path* Path_destruct( Path* self )
 {
     if ( self )
     {
-        String_free( &self->absolute );
+        Delete( &self->absolute );
     }
     return self;
 }
@@ -1281,7 +1282,7 @@ Path* Path_free( Path** self )
 {
     if ( *self )
     {
-        String_free( &(*self)->absolute );
+        Delete( &(*self)->absolute );
     }
     return Delete( self );
 }
@@ -1479,12 +1480,27 @@ char* Join( const char* dirname, const char* basename )
     return dst;
 }
 
+
+static String*
+String_destruct( String* self )
+{
+    if ( self )
+    {
+        self->length = 0;
+
+        CharString_free( &self->data );
+    }
+    return self;
+}
+
 String*
 String_new( const char* ch )
 {
     String* self = New( sizeof( String ) );
     if ( self )
     {
+        Object_init( &self->super, (Destructor) String_destruct );
+
         self->length = strlen( ch );
         self->data   = NewArray( sizeof( char ), self->length + 1 );
 
@@ -1494,6 +1510,7 @@ String_new( const char* ch )
     return self;
 }
 
+/*
 String*
 String_free( String** self )
 {
@@ -1505,6 +1522,7 @@ String_free( String** self )
     }
     return Delete( self );
 }
+*/
 
 const char*
 String_getChars( const String*  self )
@@ -1682,7 +1700,7 @@ String_trimEnd( String* self )
 Array*
 String_toArray_separator( const String* self, char separator )
 {
-    Array* parts = Array_new_free( (Free) String_free );
+    Array* parts = Array_new_free( (Free) Platform_Delete );
 
     int loop  = 1;
     int start = 0;
@@ -1714,7 +1732,7 @@ String_toArray_separator( const String* self, char separator )
             }
             else
             {
-                String_free( &part );
+                Delete( &part );
             }
             loop = 0;
         }
@@ -1745,7 +1763,7 @@ String_reverseParts_separator( const String* self, char separator )
                 }
             }
         }
-        Array_setFree( parts, (void *(*)(void **)) String_free );
+        Array_setFree( parts, (void *(*)(void **)) Platform_Delete );
         Delete( &parts );
     }
     reversed = String_new( StringBuffer_getChars( buffer ) );
