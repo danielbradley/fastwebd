@@ -11,6 +11,7 @@ int main( int argc, char** argv )
     {
         const String* default_domain = Arguments_getStringFor_flag_default( arguments, "--default-domain", null );
         int           port           = Arguments_getIntFor_flag_default   ( arguments, "--port",           8080 );
+        bool          wait           = Arguments_has_flag                 ( arguments, "--wait"                 );
 
         HTTPServer* server = HTTPServer_new_port( port );
 
@@ -19,14 +20,14 @@ int main( int argc, char** argv )
             HTTPServer_Panic();
         }
         else
-        if ( !HTTPServer_listen( server ) )
+        if ( !HTTPServer_listen_wait( server, wait ) )
         {
             HTTPServer_InvalidPort();
         }
         else
         {
             HTTPServer_setDefaultDomain ( server, default_domain );
-            HTTPServer_acceptConnections( server               );
+            HTTPServer_acceptConnections( server                 );
         }
 
         HTTPServer_free( &server );

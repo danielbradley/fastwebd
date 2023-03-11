@@ -79,11 +79,11 @@ HTTPServer_free( HTTPServer** self )
 }
 
 bool
-HTTPServer_listen( HTTPServer* self )
+HTTPServer_listen_wait( HTTPServer* self, bool wait )
 {
     bool status = false;
 
-    if ( IO_bind( self->socket, self->loopback ) )
+    if ( IO_bind_address_wait( self->socket, self->loopback, wait ) )
     {
         printf( "Bound socket to any\n" );
 

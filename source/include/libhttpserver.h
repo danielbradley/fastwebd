@@ -7,7 +7,7 @@ typedef struct _HTTPServer  HTTPServer;
 
 HTTPServer* HTTPServer_new_port         ( short        port );
 HTTPServer* HTTPServer_free             ( HTTPServer** self );
-bool        HTTPServer_listen           ( HTTPServer*  self );
+bool        HTTPServer_listen_wait      ( HTTPServer*  self, bool wait );
 void        HTTPServer_acceptConnections( HTTPServer*  self );
 bool        HTTPServer_hasDefaultDomain ( HTTPServer*  self );
 void        HTTPServer_setDefaultDomain ( HTTPServer*  self, const String* defaultDomain );

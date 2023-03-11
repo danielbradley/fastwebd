@@ -296,6 +296,24 @@ Arguments_getStringFor_flag_default( const Arguments* self, const char* flag, co
     return ret;
 }
 
+bool
+Arguments_has_flag( const Arguments*  self, const char* flag )
+{
+    bool ret = false;
+    int  n   = Array_count( self->keyValues );
+
+    for ( int i=0; i < n; i++ )
+    {
+        const KeyValue* keyval = Array_get_index( self->keyValues, i );
+        if ( KeyValue_keyEquals_chars( keyval, flag ) )
+        {
+            ret = true;
+            break;
+        }
+    }
+    return ret;
+}
+
 Array*
 Array_new()
 {
@@ -993,14 +1011,19 @@ IO* IO_free( IO** self )
     return Delete( self );
 }
 
-bool IO_bind( IO* self, Address* toAddress )
+bool IO_bind_address_wait( IO* self, Address* address, bool wait )
 {
-    int result = bind( self->descriptor, &toAddress->inner, sizeof( Address ) );
-
-    if ( 0 != result )
+    int result = 0;
+    do
     {
-        //PrintError( result );
+        result = bind( self->descriptor, &address->inner, sizeof( Address ) );
+        if (0 != result)
+        {
+            Platform_SecondSleep( 2 );
+        }
     }
+    while ( wait && result );
+
     return (0 == result);
 }
 
