@@ -429,10 +429,10 @@ HTTPServer_DetermineFiles__srvDir_request( const Path* srvDir, const HTTPRequest
                         }
                         else
                         {
-                            File_free( &alt_file );
+                            Delete( &alt_file );
                             ArrayOfFile_free( &files );
                         }
-                        File_free( &file );
+                        Delete( &file );
                     }
                 }
             }

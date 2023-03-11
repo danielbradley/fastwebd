@@ -2,7 +2,7 @@
 #define LIBBASE_FILE_H
 
 File*         File_new             ( const char*   filepath );
-File*         File_free            (       File**  self     );
+//File*         File_free            (       File**  self     );
 IO*           File_getIO           ( const File*   self     );
 
 long long     File_getByteSize     ( const File*   self     );

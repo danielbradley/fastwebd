@@ -73,6 +73,7 @@ struct _Address
 
 struct _File
 {
+    Object      super;
     String*     filepath;
     String*     extension;
     const char* mimeType;
@@ -584,7 +585,7 @@ ArrayOfFile* ArrayOfFile_new()
     ArrayOfFile* self = New( sizeof(ArrayOfFile) );
     if ( self )
     {
-        self->files = Array_new_free( (void *(*)(void **)) File_free );
+        self->files = Array_new();
     }
     return self;
 }
@@ -593,7 +594,7 @@ ArrayOfFile* ArrayOfFile_free( ArrayOfFile** self )
 {
     if ( *self )
     {
-        //Array_free_destructor( &(*self)->files, (void *(*)(void **)) File_free );
+        Array_setFree( (*self)->files, (void *(*)(void **)) Platform_Delete );
         Delete( &(*self)->files );
     }
     return Delete( self );
@@ -697,6 +698,23 @@ CharString_length( const char* self )
     return strlen( self );
 }
 
+static File* File_destruct( File* self )
+{
+    if ( self )
+    {
+        String_free( &self->filepath  );
+        String_free( &self->extension );
+
+        self->byteSize = 0;
+
+        if ( self->io )
+        {
+            IO_free( &self->io );
+        }
+    }
+    return self;
+}
+
 File* File_new ( const char* filepath )
 {
     struct stat buf;
@@ -704,6 +722,8 @@ File* File_new ( const char* filepath )
     File* self = New( sizeof( File ) );
     if ( self )
     {
+        Object_init( &self->super, (Destructor) File_destruct );
+
         self->filepath  = String_new( filepath );
         self->extension = String_extension( self->filepath, '.' );
         self->mimeType  = File_DetermineMimeType( self->extension );
