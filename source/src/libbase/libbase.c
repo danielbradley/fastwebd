@@ -47,6 +47,7 @@ struct _Array
 
 struct _ArrayOfFile
 {
+    Object super;
     Array* files;
 };
 
@@ -206,6 +207,17 @@ int Exit( int exit )
     return exit;
 }
 
+static Arguments*
+Arguments_destruct( Arguments* self )
+{
+    if ( self )
+    {
+        Delete         ( &self->keyValues );
+        Object_destruct( &self->super     );
+    }
+    return self;
+}
+
 Arguments*
 Arguments_new_count_arguments( int count, char** arguments )
 {
@@ -213,7 +225,9 @@ Arguments_new_count_arguments( int count, char** arguments )
     if ( self )
     {
         Object_init( &self->super, (Destructor) Arguments_destruct );
-        self->keyValues = Array_new_free( (Free) KeyValue_free );
+        self->keyValues = Array_new();
+
+        Array_setFree( self->keyValues, (Free) Platform_Delete );
 
         int i = 0;
         for ( i=1; i < count; i++ )
@@ -227,16 +241,6 @@ Arguments_new_count_arguments( int count, char** arguments )
     return self;
 }
 
-Arguments*
-Arguments_destruct( Arguments* self )
-{
-    if ( self )
-    {
-        Delete         ( &self->keyValues );
-        Object_destruct( &self->super     );
-    }
-    return self;
-}
 
 /*
 Arguments*
@@ -570,24 +574,27 @@ Array_joinStrings_separator_number( const Array* self, char separator, int numbe
     return joined;
 }
 
+static ArrayOfFile*
+ArrayOfFile_destruct( ArrayOfFile* self )
+{
+    if ( self )
+    {
+        Delete( &self->files );
+    }
+    return self;
+}
+
 ArrayOfFile* ArrayOfFile_new()
 {
     ArrayOfFile* self = New( sizeof(ArrayOfFile) );
     if ( self )
     {
+        Object_init( &self->super, (Destructor) ArrayOfFile_destruct );
+
         self->files = Array_new();
+        Array_setFree( self->files, (Free) Platform_Delete );
     }
     return self;
-}
-
-ArrayOfFile* ArrayOfFile_free( ArrayOfFile** self )
-{
-    if ( *self )
-    {
-        Array_setFree( (*self)->files, (void *(*)(void **)) Platform_Delete );
-        Delete( &(*self)->files );
-    }
-    return Delete( self );
 }
 
 void ArrayOfFile_append_file( ArrayOfFile* self, File** file )
@@ -1160,6 +1167,17 @@ IO_Socket()
     return IO_new( &fd );
 }
 
+static KeyValue*
+KeyValue_destruct( KeyValue* self )
+{
+    if ( self )
+    {
+        Delete( &self->key   );
+        Delete( &self->value );
+    }
+    return self;
+}
+
 KeyValue*
 KeyValue_new( const char* key, const char* value )
 {
@@ -1174,17 +1192,7 @@ KeyValue_new( const char* key, const char* value )
     return self;
 }
 
-KeyValue*
-KeyValue_destruct( KeyValue* self )
-{
-    if ( self )
-    {
-        Delete( &self->key   );
-        Delete( &self->value );
-    }
-    return self;
-}
-
+/*
 KeyValue*
 KeyValue_free( KeyValue** self )
 {
@@ -1196,6 +1204,7 @@ KeyValue_free( KeyValue** self )
     }
     return null;
 }
+*/
 
 const String*
 KeyValue_getKey( const KeyValue* self )

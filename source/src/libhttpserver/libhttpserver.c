@@ -338,7 +338,7 @@ HTTPServer_Process_srvDir_peer_connection_defaultDomain( const Path* srvDir, con
                 }
                 Delete( &headers );
             }
-            ArrayOfFile_free( &files );
+            Delete( &files );
         }
         if ( Debug ) fprintf( stdout, "END\n" );
         fflush( stdout );
@@ -412,7 +412,7 @@ HTTPServer_DetermineFiles__srvDir_request( const Path* srvDir, const HTTPRequest
 
                     if ( 0 == ArrayOfFile_count( files ) )
                     {
-                        ArrayOfFile_free( &files );
+                        Delete( &files );
                     }
                 }
                 else
@@ -433,7 +433,7 @@ HTTPServer_DetermineFiles__srvDir_request( const Path* srvDir, const HTTPRequest
                         else
                         {
                             Delete( &alt_file );
-                            ArrayOfFile_free( &files );
+                            Delete( &files );
                         }
                         Delete( &file );
                     }
