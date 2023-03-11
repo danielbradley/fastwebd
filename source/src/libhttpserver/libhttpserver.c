@@ -265,7 +265,7 @@ HTTPServer_Process_srvDir_peer_connection_defaultDomain( const Path* srvDir, con
 
                     HTTPRequest_log_status( request, status, 204 );
                 }
-                StringBuffer_free( &headers );
+                Delete( &headers );
             }
             else
             if ( 1 )
@@ -333,7 +333,7 @@ HTTPServer_Process_srvDir_peer_connection_defaultDomain( const Path* srvDir, con
 
                     HTTPRequest_log_status( request, status, 200 );
                 }
-                StringBuffer_free( &headers );
+                Delete( &headers );
             }
             ArrayOfFile_free( &files );
         }
@@ -364,8 +364,8 @@ GenerateAltPath( const Path* site_dir, const String* resource )
 
             alt_path = Path_child( site_dir, StringBuffer_getChars( buffer ) );
         }
-        Delete      ( &real_resource );
-        StringBuffer_free( &buffer        );
+        Delete( &real_resource );
+        Delete( &buffer        );
     }
     return alt_path;
 }

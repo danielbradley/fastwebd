@@ -2,7 +2,7 @@
 #define FASTWEBD_STRINGBUFFER_H
 
       StringBuffer* StringBuffer_new          ();
-      StringBuffer* StringBuffer_free         (       StringBuffer** self );
+//    StringBuffer* StringBuffer_free         (       StringBuffer** self );
 
       void          StringBuffer_append_chars (       StringBuffer*  self, const char*   chars  ); 
       void          StringBuffer_append_string(       StringBuffer*  self, const String* string );

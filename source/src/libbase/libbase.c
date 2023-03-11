@@ -103,9 +103,10 @@ struct _String
 
 struct _StringBuffer
 {
-    int   capacity;
-    int   length;
-    char* data;
+    Object super;
+    int    capacity;
+    int    length;
+    char*  data;
 };
 
 /*
@@ -577,7 +578,7 @@ Array_joinStrings_separator_number( const Array* self, char separator, int numbe
     }
     joined = String_new( StringBuffer_getChars( buffer ) );
 
-    StringBuffer_free( &buffer );
+    Delete( &buffer );
 
     return joined;
 }
@@ -1768,7 +1769,7 @@ String_reverseParts_separator( const String* self, char separator )
     }
     reversed = String_new( StringBuffer_getChars( buffer ) );
 
-    StringBuffer_free( &buffer );
+    Delete( &buffer );
 
     return reversed;
 }
@@ -1820,12 +1821,27 @@ FGetLine( FILE* stream, size_t* len )
     return line;
 }
 
+static StringBuffer*
+StringBuffer_destruct( StringBuffer* self )
+{
+    if ( self )
+    {
+        self->capacity = 0;
+        self->length   = 0;
+
+        CharString_free( &self->data );
+    }
+    return self;
+}
+
 StringBuffer*
 StringBuffer_new()
 {
     StringBuffer* self = New( sizeof( StringBuffer ) );
     if ( self )
     {
+        Object_init( &self->super, (Destructor) StringBuffer_destruct );
+
         self->capacity = 1;
         self->length   = 0;
         self->data     = NewArray( sizeof( char ), self->capacity );
@@ -1834,6 +1850,7 @@ StringBuffer_new()
     return self;
 }
 
+/*
 StringBuffer*
 StringBuffer_free( StringBuffer** self )
 {
@@ -1846,6 +1863,7 @@ StringBuffer_free( StringBuffer** self )
     }
     return Delete( self );
 }
+*/
 
 void
 StringBuffer_append_chars( StringBuffer* self, const char* chars )
