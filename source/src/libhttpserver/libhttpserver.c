@@ -39,6 +39,7 @@ void ignoreSigpipe( int signal )
 
 struct _HTTPServer
 {
+    Object   super;
     short    port;
     Address* loopback;
     IO*      socket;
@@ -46,10 +47,25 @@ struct _HTTPServer
 };
 
 HTTPServer*
+HTTPServer_destruct( HTTPServer* self )
+{
+    if ( self )
+    {
+        self->port = 0;
+        Delete( &self->loopback      );
+        Delete( &self->socket        );
+        Delete( &self->defaultDomain );
+    }
+    return self;
+}
+
+HTTPServer*
 HTTPServer_new_port( short port )
 {
     HTTPServer* self = New( sizeof( HTTPServer ) );
     {
+        Object_init( &self->super, (Destructor) HTTPServer_destruct );
+
         self->port          = port;
         self->loopback      = Address_new_port( port );
         self->socket        = IO_Socket();
@@ -63,19 +79,6 @@ HTTPServer_new_port( short port )
     ServerSocket = self->socket;
 
     return self;
-}
-
-HTTPServer*
-HTTPServer_free( HTTPServer** self )
-{
-    if ( *self )
-    {
-        (*self)->port = 0;
-        Delete      ( &(*self)->loopback      );
-        Delete     ( &(*self)->socket        );
-        Delete ( &(*self)->defaultDomain );
-    }
-    return Delete( self );
 }
 
 bool

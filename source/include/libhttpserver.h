@@ -6,7 +6,7 @@
 typedef struct _HTTPServer  HTTPServer;
 
 HTTPServer* HTTPServer_new_port         ( short        port );
-HTTPServer* HTTPServer_free             ( HTTPServer** self );
+//HTTPServer* HTTPServer_free             ( HTTPServer** self );
 bool        HTTPServer_listen_wait      ( HTTPServer*  self, int wait );
 void        HTTPServer_acceptConnections( HTTPServer*  self );
 bool        HTTPServer_hasDefaultDomain ( HTTPServer*  self );

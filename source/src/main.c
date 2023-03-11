@@ -35,7 +35,7 @@ int main( int argc, char** argv )
             HTTPServer_acceptConnections( server                 );
         }
 
-        HTTPServer_free( &server );
+        Delete( &server );
     }
 
     SysLog_Stop();
