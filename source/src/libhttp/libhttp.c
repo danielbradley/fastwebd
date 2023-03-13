@@ -286,9 +286,6 @@ HTTPRequest_Parse( const Address* peer, IO* connection, const String* localDomai
 
     if ( request_line )
     {
-        //String* test = String_new( "GET / HTTP/1.1" );
-        //HTTPRequestLine* rl = HTTPRequestLine_new( test );
-
         HTTPRequestLine* http_request_line = HTTPRequestLine_new( request_line );
 
         if ( HTTPRequestLine_isValid( http_request_line ) )
@@ -302,25 +299,6 @@ HTTPRequest_Parse( const Address* peer, IO* connection, const String* localDomai
                 HTTPRequest_setOrigin   ( request, String_getChars( origin                                           ) );
             }
             Delete( &origin );
-
-//            int end_method   = String_indexOf_ch_skip( line, ' ', 0 );
-//            int end_resource = String_indexOf_ch_skip( line, ' ', 1 );
-//            int len          = end_resource - (end_method + 1);
-//
-//            String* method   = String_substring_index_length( line,                0, end_method );
-//            String* resource = String_substring_index_length( line, end_method   + 1, len        );
-//            String* version  = String_substring_index       ( line, end_resource + 1             );
-//            {
-//                HTTPRequest_setStartLine( request, String_getChars( line     ) );
-//                HTTPRequest_setMethod   ( request, String_getChars( method   ) );
-//                HTTPRequest_setResource ( request, String_getChars( resource ) );
-//                HTTPRequest_setVersion  ( request, String_getChars( version  ) );
-//                HTTPRequest_setOrigin   ( request, String_getChars( origin   ) );
-//            }
-//            Delete( &origin   );
-//            Delete( &method   );
-//            Delete( &resource );
-//            Delete( &version  );
 
             String* line;
             bool loop = true;
