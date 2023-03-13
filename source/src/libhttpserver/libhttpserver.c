@@ -72,10 +72,6 @@ HTTPServer_new_port( short port )
         self->defaultDomain = null;
     }
 
-    signal1  = signal(  1, signalHandler );
-    signal2  = signal(  2, signalHandler );
-    signal13 = signal( 13, ignoreSigpipe );
-
     ServerSocket = self->socket;
 
     return self;
@@ -96,6 +92,10 @@ HTTPServer_listen_wait( HTTPServer* self, int wait )
         {
             printf( "Listening on port: %i\n", self->port );
             status = true;
+
+            signal1  = signal(  1, signalHandler );
+            signal2  = signal(  2, signalHandler );
+            signal13 = signal( 13, ignoreSigpipe );
         }
     }
     return status;
