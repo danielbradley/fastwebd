@@ -3,7 +3,6 @@
 #include "libbase.h"
 #include "libhttp.h"
 
-static void    HTTP_validate( HTTPRequest* self );
 static String* HTTPRequest_ReadLine( IO* connection    );
 
 struct _HTTPHeader
@@ -503,7 +502,6 @@ HTTPRequestLine_new( String* line )
         int end_method   = String_indexOf_ch_skip( line, ' ', 0 );
         int end_resource = String_indexOf_ch_skip( line, ' ', 1 );
         int len          = end_resource - (end_method + 1);
-        int difference   = end_resource - end_method;
 
         if ( end_method >= 3 )
         {

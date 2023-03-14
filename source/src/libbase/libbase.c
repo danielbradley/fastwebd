@@ -263,7 +263,8 @@ Arguments_getIntFor_flag_default( const Arguments* self, const char* flag, int _
         if ( KeyValue_keyEquals_chars( keyval, flag ) )
         {
             const String* value = KeyValue_getValue( keyval );
-            int           ret   = String_toNumber_default( value, _default );
+
+            ret = String_toNumber_default( value, _default );
             break;
         }
     }
@@ -1202,14 +1203,33 @@ static Path* Path_destruct( Path* self )
 
 Path* Path_new( const char* absolute )
 {
-    Path* self = New( sizeof( Path ) );
-    if ( self )
-    {
-        Object_init( &self->super, (Destructor) Path_destruct );
+    Path* self;
 
-        self->absolute = String_new( absolute );
+    if ( '/' != absolute[0] )
+    {
+        Path* cwd = Path_CurrentDirectory();
+        self = Path_child( cwd, absolute );
+    }
+    else
+    {
+        self = New( sizeof( Path ) );
+        if ( self )
+        {
+            Object_init( &self->super, (Destructor) Path_destruct );
+
+            self->absolute = String_new( absolute );
+        }
     }
     return self;
+}
+
+bool
+Path_isDirectory( const Path* self )
+{
+    struct stat  buf;
+    const char* _path = Path_getAbsolute( self );
+
+    return (0 == lstat( _path, &buf )) && S_ISDIR( buf.st_mode );
 }
 
 /*
@@ -1258,6 +1278,21 @@ Path* Path_CurrentDirectory()
     free( cwd );
 
     return path;
+}
+
+bool
+Platform_ChangeDir( const Path* path )
+{
+    if ( Path_isDirectory( path ) )
+    {
+        const char* _path = Path_getAbsolute( path );
+
+        return (0 == chdir( _path ));
+    }
+    else
+    {
+        return false;
+    }
 }
 
 int

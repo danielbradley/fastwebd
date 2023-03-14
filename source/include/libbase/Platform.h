@@ -19,12 +19,13 @@ typedef void*(*Free)(void**);
 #define DeleteArray( self        ) Platform_DeleteArray( (void**) self )
 #define        Take( self        )          TakeElement( (void**) self )
 
-void* Platform_New   ( int size, int count );
-void* Platform_Delete( void** element );
-int   Platform_Fork();
-void  Platform_MicroSleep ( int microseconds );
-void  Platform_MilliSleep ( int milliseconds );
-void  Platform_SecondSleep( int      seconds );
-void  Platform_Wait();
+void* Platform_New        ( int size, int count );
+bool  Platform_ChangeDir  ( const Path* path    );
+void* Platform_Delete     ( void** element      );
+int   Platform_Fork       (                     );
+void  Platform_MicroSleep ( int microseconds    );
+void  Platform_MilliSleep ( int milliseconds    );
+void  Platform_SecondSleep( int      seconds    );
+void  Platform_Wait       (                     );
 
 #endif
